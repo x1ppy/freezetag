@@ -58,9 +58,7 @@ def parse_args():
 
     for parser in [thaw, show]:
         parser.add_argument('--ftag', metavar='file',
-            help='Freezetag file to use. Uses the .ftag in directory by default.'
-            '\nRequired if there is no .ftag in directory, or if there is'
-            '\nmore than one .ftag in directory.')
+            help='Freezetag file to use. Uses the .ftag in directory by default.')
 
     show.add_argument('--json', action='store_true', help='Prints JSON output.')
 
@@ -302,6 +300,9 @@ def freeze():
 
         files.append(dict)
         print('{0} {1}'.format(music_checksum.hex(), dict['path']))
+
+    if not len(music_checksums):
+        raise FreezeTagException('No music files found.')
 
     data = {
         'signature': b'freezetag',
