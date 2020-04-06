@@ -200,14 +200,14 @@ Before:
 After:
 
     $> freezetag shave
-	Beethoven-Symphony5-1.mp3
-		shaved ID3v1 (128)
-	fur-elise.mp3
-		shaved ID3v1 (128)
-	sugar-plum-fairy.mp3
-		shaved ID3v1 (128)
-	$> id3ted -l *
-	(no output)
+    Beethoven-Symphony5-1.mp3
+        shaved ID3v1 (128)
+    fur-elise.mp3
+        shaved ID3v1 (128)
+    sugar-plum-fairy.mp3
+        shaved ID3v1 (128)
+    $> id3ted -l *
+    (no output)
 
 `freezetag shave` can be useful if you want to share the "bare" music files. This has the advantage of smaller overall
 distribution size (especially if the music contains images), and it also has the advantage of separation of concerns.
@@ -229,15 +229,15 @@ Shows the contents of a freezetag file.
 You can also use the `--json` flag to get parse-friendly output:
 
     $> freezetag show --json
-	{'files': [{'checksum': '455d965a07357826e76118a3c84ffbac0463fde0',
-				'path': 'Beethoven-Symphony5-1.mp3'},
-			   {'checksum': '6f860819575aa0bef153b9d1477030bb9f91d27d',
-				'path': 'fur-elise.mp3'},
-			   {'checksum': '6fa39dfda7512e26a6dca13579a7739279e1d193',
-				'path': 'sugar-plum-fairy.mp3'}],
-	 'id': 'Ff347f70000e23124-863f2c3d-2675d4d7',
-	 'root': 'beethoven-example',
-	 'version': 1}
+    {'files': [{'checksum': '455d965a07357826e76118a3c84ffbac0463fde0',
+                'path': 'Beethoven-Symphony5-1.mp3'},
+               {'checksum': '6f860819575aa0bef153b9d1477030bb9f91d27d',
+                'path': 'fur-elise.mp3'},
+               {'checksum': '6fa39dfda7512e26a6dca13579a7739279e1d193',
+                'path': 'sugar-plum-fairy.mp3'}],
+     'id': 'Ff347f70000e23124-863f2c3d-2675d4d7',
+     'root': 'beethoven-example',
+     'version': 1}
 
 Freezetag ID
 ------------
