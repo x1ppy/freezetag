@@ -117,11 +117,18 @@ def get_ftag():
     if not len(freezetag_paths):
         raise FreezeTagException('No freezetag file found in {0}'.format(root))
 
-    if len(freezetag_paths) > 1:
-        raise FreezeTagException('Freezetag file must be specified; multiple freezetags found:\n{0}'.format(
-            '\n'.join(str(p) for p in freezetag_paths)))
+    index = 0
 
-    return freezetag_paths[0]
+    if len(freezetag_paths) > 1:
+        print('Multiple freezetags found.')
+        for i, path in enumerate(freezetag_paths):
+            print('{0}: {1}'.format(i, path))
+        choice = ''
+        while not choice.isdecimal() or int(choice) < 0 or int(choice) >= len(freezetag_paths):
+            choice = input('Select freezetag [0-{0}]: '.format(len(freezetag_paths)-1))
+        index = int(choice)
+
+    return freezetag_paths[index]
 
 
 def walk_dir(path):
@@ -353,5 +360,5 @@ try:
     elif args.command == 'show':
         show()
 except FreezeTagException as e:
-    print('Error: {0}'.format(e), file=sys.stderr)
+    print(e, file=sys.stderr)
     sys.exit(1)

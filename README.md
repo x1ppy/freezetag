@@ -132,11 +132,11 @@ Let's run `freezetag thaw`:
 
     $> freezetag thaw
     455d965a07357826e76118a3c84ffbac0463fde0 Beethoven-Symphony5-1.mp3
-        thawing /x1ppy/beethoven-example/01-symphany.mp3
+        thawing /home/x1ppy/beethoven-example/01-symphany.mp3
     6f860819575aa0bef153b9d1477030bb9f91d27d fur-elise.mp3
-        thawing /x1ppy/beethoven-example/02-fur-elise.mp3
+        thawing /home/x1ppy/beethoven-example/02-fur-elise.mp3
     6fa39dfda7512e26a6dca13579a7739279e1d193 sugar-plum-fairy.mp3
-        thawing /x1ppy/beethoven-example/03-sugar-plum-fairy.mp3
+        thawing /home/x1ppy/beethoven-example/03-sugar-plum-fairy.mp3
 
 Now, if we list the directory contents, we see that the files are back to their original names:
 
@@ -256,3 +256,13 @@ have both the same **a** and **b** segments, they represent the same set of raw 
 If all three segments are the same, the two freezetag files are identical. Therefore, running `freezetag freeze` twice
 will only result in a single freezetag file being created: since the ID will stay the same, the existing freezetag file
 will be replaced on the second invocation.
+
+Changelog
+---------
+### [1.0.1] - 2020-04-06
+* Added selection prompt for multiple freezetags
+### [1.0.0] - 2020-04-06
+* Initial release
+
+[1.0.1]: https://github.com/x1ppy/freezetag/compare/1.0.0...1.0.1
+[1.0.0]: https://github.com/x1ppy/freezetag/releases/tag/1.0.0
