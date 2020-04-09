@@ -25,6 +25,7 @@ def parse_args():
         description='Saves, strips, and restores file paths and music metadata.',
         formatter_class=argparse.RawTextHelpFormatter)
     sub = main.add_subparsers(metavar='command', dest='command')
+    sub.required = True
 
     def add_subparser(command, help, description=''):
         return sub.add_parser(command, help=help, description=help + description,
@@ -52,7 +53,9 @@ def parse_args():
               '\nand only supported metadata (Vorbis comments, ID3) will be stripped.')
     show = add_subparser('show', 'Displays the contents of a freezetag file.')
 
-    for parser in [main, freeze, thaw, shave, show]:
+    main.add_argument('directory_', metavar='directory', nargs='?',
+        help='Directory to process (default: current directory).')
+    for parser in [freeze, thaw, shave, show]:
         parser.add_argument('directory', nargs='?', default=Path.cwd(),
             help='Directory to process (default: current directory).')
 
@@ -66,6 +69,7 @@ def parse_args():
         help='Directory to which thawed state will be restored. By default,'
         '\nthe state will be restored in-place to directory, replacing'
         '\nexisting tags and paths.')
+
     return main.parse_args()
 
 
