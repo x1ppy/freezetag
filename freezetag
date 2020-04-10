@@ -53,19 +53,17 @@ def parse_args():
               '\nand only supported metadata (Vorbis comments, ID3) will be stripped.')
     show = add_subparser('show', 'Displays the contents of a freezetag file.')
 
-    main.add_argument('directory_', metavar='directory', nargs='?',
-        help='Directory to process (default: current directory).')
-    for parser in [freeze, thaw, shave, show]:
+    for parser in [freeze, thaw, shave]:
         parser.add_argument('directory', nargs='?', default=Path.cwd(),
             help='Directory to process (default: current directory).')
 
-    for parser in [thaw, show]:
-        parser.add_argument('--ftag', metavar='file',
-            help='Freezetag file to use. Uses the .ftag in directory by default.')
-
+    show.add_argument('directory', nargs='?', metavar='path', default=Path.cwd(),
+        help='Directory containing .ftag file, or .ftag file itself\n'
+             '(default: current directory)')
     show.add_argument('--json', action='store_true', help='Prints JSON output.')
 
-    thaw.add_argument('--to', metavar='dir',
+    thaw.add_argument('--ftag', metavar='file', help='Freezetag file to use. Uses the .ftag in directory by default.')
+    thaw.add_argument('--to', metavar='directory',
         help='Directory to which thawed state will be restored. By default,'
         '\nthe state will be restored in-place to directory, replacing'
         '\nexisting tags and paths.')
@@ -110,10 +108,7 @@ def get_id(frozen, frozen_bytes):
     return 'F' + '-'.join([frozen['music_checksum'].hex(), frozen['metadata_checksum'].hex(), frozen_checksum.hex()])
 
 
-def get_ftag():
-    if args.ftag:
-        return Path(args.ftag)
-
+def find_ftag():
     freezetag_paths = [p for p in root.iterdir() if p.suffix.lower() == '.ftag']
 
     if not len(freezetag_paths):
@@ -176,7 +171,11 @@ def shave():
 
 
 def thaw():
-    ftag = get_ftag()
+    if args.ftag:
+        ftag = Path(args.ftag)
+    else:
+        ftag = find_ftag()
+
     frozen = FreezeFormat.parse_file(ftag)
     tmpdir = ftag.with_suffix('.ftag-tmp')
 
@@ -326,7 +325,12 @@ def freeze():
 
 
 def show():
-    with open(get_ftag(), 'rb') as f:
+    if Path(args.directory).suffix == '.ftag':
+        ftag = Path(args.directory)
+    else:
+        ftag = find_ftag()
+
+    with open(ftag, 'rb') as f:
         frozen_bytes = f.read()
     frozen = FreezeFormat.parse(frozen_bytes)
 

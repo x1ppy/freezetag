@@ -10,7 +10,7 @@ Usage
 -----
 
 ~~~
-usage: freezetag [-h] command ... [directory]
+usage: freezetag [-h] command ...
 
 Saves, strips, and restores file paths and music metadata.
 
@@ -20,7 +20,6 @@ positional arguments:
     thaw      Restores paths and music metdata in directory from a freezetag file.
     shave     Strips metadata from all music files in directory.
     show      Displays the contents of a freezetag file.
-  directory   Directory to process (default: current directory).
 
 optional arguments:
   -h, --help  show this help message and exit
@@ -259,6 +258,8 @@ will be replaced on the second invocation.
 
 Changelog
 ---------
+### [1.0.3] - 2020-04-09
+* Allow `show` to accept .ftag directly
 ### [1.0.2] - 2020-04-09
 * Fixed directory argument parsing
 ### [1.0.1] - 2020-04-06
@@ -266,6 +267,7 @@ Changelog
 ### [1.0.0] - 2020-04-06
 * Initial release
 
+[1.0.3]: https://github.com/x1ppy/freezetag/compare/1.0.2...1.0.3
 [1.0.2]: https://github.com/x1ppy/freezetag/compare/1.0.1...1.0.2
 [1.0.1]: https://github.com/x1ppy/freezetag/compare/1.0.0...1.0.1
 [1.0.0]: https://github.com/x1ppy/freezetag/releases/tag/1.0.0
