@@ -194,9 +194,6 @@ def thaw():
         files[f.checksum][0].append(f)
 
     for path, rel_path in walk_dir(root):
-        if not rel_path.parts[0].lower().endswith('.ftag-tmp'):
-            to_remove.append(path)
-
         filetype = filetype_for_extension.get(path.suffix.lower())
         if not filetype:
             checksum = hash_file(path)
@@ -205,7 +202,13 @@ def thaw():
             music.strip()
             checksum = hash_bytes(filetype.format.build(music.instance))
 
-        if checksum not in files or files[checksum][1]:
+        if checksum not in files:
+            continue
+
+        if not rel_path.parts[0].lower().endswith('.ftag-tmp'):
+            to_remove.append(path)
+
+        if files[checksum][1]:
             continue
 
         files[checksum][1] = True
