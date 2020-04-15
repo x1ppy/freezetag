@@ -2,6 +2,7 @@
 import argparse
 import construct
 import hashlib
+import json
 import os
 import pprint
 import re
@@ -472,7 +473,7 @@ def show():
     frozen = freezetag.frozen
 
     if args.json:
-        pprint.pprint({
+        print(json.dumps({
             'version': freezetag.version,
             'mode': freeze_modes[frozen.mode],
             'id': get_id(freezetag, freezetag_bytes),
@@ -481,7 +482,7 @@ def show():
                 'path': f.path,
                 'checksum': f.checksum.hex(),
             } for f in frozen.files],
-        })
+        }, indent=2))
     else:
         print('version: {0}'.format(freezetag.version))
         print('mode:    {0}'.format(freeze_modes[frozen.mode]))

@@ -260,6 +260,7 @@ Changelog
 ---------
 ### [1.1.0] - 2020-04-15
 * Added `freeze --backup` for incremental backups
+* Fixed `show --json` to properly dump JSON
 ### [1.0.4] - 2020-04-10
 * Don't delete files on thaw if they aren't listed in ftag
 ### [1.0.3] - 2020-04-09
