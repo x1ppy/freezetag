@@ -209,12 +209,14 @@ def find_ftag(path):
     index = 0
 
     if len(freezetag_paths) > 1:
-        print('Multiple freezetags found.')
+        print('Multiple freezetags found in directory: {0}'.format(path.resolve()))
         for i, path in enumerate(freezetag_paths):
-            print('{0}: {1}'.format(i, path))
+            print('{0}: {1}'.format(i, path.name))
         choice = ''
         while not choice.isdecimal() or int(choice) < 0 or int(choice) >= len(freezetag_paths):
-            choice = input('Select freezetag [0-{0}]: '.format(len(freezetag_paths)-1))
+            choice = input('Select freezetag [0-{0}], or q to quit: '.format(len(freezetag_paths)-1))
+            if choice.lower() == 'q':
+                sys.exit(0)
         index = int(choice)
 
     return freezetag_paths[index]
