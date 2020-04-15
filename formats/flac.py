@@ -38,6 +38,9 @@ class FlacFile:
     def __init__(self, file_bytes):
         self.instance = FlacFormat.parse(file_bytes)
 
+        # Workaround for https://github.com/construct/construct/issues/852
+        self.instance._io.close()
+
     def strip(self):
         streaminfo = self.instance.metadata[0]
         streaminfo.info.last = True

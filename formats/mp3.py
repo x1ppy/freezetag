@@ -102,6 +102,9 @@ class Mp3File:
     def __init__(self, file_bytes):
         self.instance = Mp3Format.parse(file_bytes)
 
+        # Workaround for https://github.com/construct/construct/issues/852
+        self.instance._io.close()
+
     def strip(self):
         metadata = {
             'flags': {

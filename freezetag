@@ -4,18 +4,42 @@ import construct
 import hashlib
 import os
 import pprint
+import re
 import tempfile
 import shutil
 import sys
+from datetime import datetime
 from formats.flac import FlacFile, FlacMetadataFormat
 from formats.mp3 import Mp3File, Mp3MetadataFormat
 from construct import *
 from pathlib import Path
 
 
-VERSION = 1
+# Version 2 is used only for "freeze --backup" freezetags.
+# All other freezetags are still created using version 1 so the bytes/IDs stay consistent.
+# These can be unified in a future version if the schema is updated.
+DEFAULT_VERSION = 1
+VERSION = 2
+
+freeze_modes = ['default', 'backup']
 registered_filetypes = [FlacFile, Mp3File]
 filetype_for_extension = {t.extension:t for t in registered_filetypes}
+
+
+class Reprinter():
+    def __init__(self):
+        self.last_width = 0
+
+    def print(self, text):
+        text = str(text)
+        print(text.ljust(self.last_width, ' '), end='\r')
+        self.last_width = len(text)
+
+
+def get_version():
+    if args.backup:
+        return VERSION
+    return DEFAULT_VERSION
 
 
 def parse_args():
@@ -35,7 +59,8 @@ def parse_args():
         '\n\nMusic files with supported extensions (.mp3, .flac) will have their metadata'
           '\nsaved in the .ftag file. All files will have their paths saved in the .ftag'
           '\nfile. Metadata and path state can be restored using "freezetag thaw".'
-        '\n\nThe freezetag file will be saved in directory, named Fa-b-c.ftag, where:'
+        '\n\nThe freezetag file will be saved in directory. Unless --backup is used, the'
+          '\nfreezetag file will be named Fa-b-c.ftag, where:'
           '\n  a is a 16-character segment that uniquely identifies the music'
           '\n  b is an 8-character segment that uniquely identifies the metadata'
           '\n  c is an 8-character segment that uniquely identifies the freezetag'
@@ -68,12 +93,23 @@ def parse_args():
         '\nthe state will be restored in-place to directory, replacing'
         '\nexisting tags and paths.')
 
+    freeze.add_argument('--backup', action='store_true',
+        help='Freeze in incremental backup mode.'
+        '\n\nThis mode is optimized for repeated incremental backups of the'
+          '\nsame directory.'
+        '\n\nIn backup mode, the freezetag file will be saved as'
+          '\nFyyyy-MM-dd_hh-mm-ss.ftag. File sizes and last modified times'
+          '\nwill be written to the freezetag file. On subsequent incremental'
+          '\nbackups, the last created freezetag in this directory will be'
+          '\nread. Any files whose names haven\'t changed will not have their'
+          '\nhashes recalculated, making the freeze operation significantly'
+          '\nfaster.')
+
     return main.parse_args()
 
 
-FreezeFormat = Struct(
-    'signature' / Const(b'freezetag'),
-    'version'/ Int8ub,
+FrozenFormatV1 = Struct(
+    'mode' / Computed(0),
     'music_checksum' / Bytes(8),
     'metadata_checksum' / Bytes(4),
     'root' / CString('utf8'),
@@ -86,6 +122,35 @@ FreezeFormat = Struct(
             2: Mp3File.metadata_format,
         }),
     )), 'lzma'),
+)
+
+FrozenFormatV2 = Struct(
+    'mode' / Int8ub,
+    'music_checksum' / Bytes(8),
+    'metadata_checksum' / Bytes(4),
+    'root' / CString('utf8'),
+    'files' / Compressed(PrefixedArray(Int16ub, Struct(
+        'path' / CString('utf8'),
+        'format' / Int8ub,
+        'checksum' / Bytes(20),
+        'stat' / If(this._._.mode == 1, Struct(
+            'mtime' / Double,
+            'size' / Long,
+        )),
+        'metadata' / Switch(this.format, {
+            1: FlacFile.metadata_format,
+            2: Mp3File.metadata_format,
+        }),
+    )), 'lzma'),
+)
+
+FreezeFormat = Struct(
+    'signature' / Const(b'freezetag'),
+    'version'/ Int8ub,
+    'frozen' / Switch(this.version, {
+        1: FrozenFormatV1,
+        2: FrozenFormatV2,
+    }, GreedyBytes),
     Terminated,
 )
 
@@ -103,9 +168,11 @@ def hash_file(path):
         return hash_bytes(f.read())
 
 
-def get_id(frozen, frozen_bytes):
-    frozen_checksum = hash_bytes(frozen_bytes)[0:4]
-    return 'F' + '-'.join([frozen['music_checksum'].hex(), frozen['metadata_checksum'].hex(), frozen_checksum.hex()])
+def get_id(freezetag, freezetag_bytes):
+    checksum = hash_bytes(freezetag_bytes)[0:4]
+    return 'F' + '-'.join([freezetag['frozen']['music_checksum'].hex(),
+                           freezetag['frozen']['metadata_checksum'].hex(),
+                           checksum.hex()])
 
 
 def find_ftag():
@@ -176,13 +243,14 @@ def thaw():
     else:
         ftag = find_ftag()
 
-    frozen = FreezeFormat.parse_file(ftag)
+    freeeztag = FreezeFormat.parse_file(ftag)
     tmpdir = ftag.with_suffix('.ftag-tmp')
 
-    if frozen.version > VERSION:
+    if freeeztag.version > VERSION:
         raise FreezeTagException('Freezetag file version greater than freezetag version ({0} > {1}).\n'
-                                 'Update freezetag and try again.'.format(frozen.version, VERSION))
+                                 'Update freezetag and try again.'.format(freeeztag.version, VERSION))
 
+    frozen = freeeztag.frozen
     to_dir = Path(args.to).resolve() / frozen.root if args.to else root
     to_remove = []
 
@@ -258,11 +326,31 @@ def thaw():
 
     shutil.rmtree(tmpdir)
 
-    if root == to_dir:
+    if frozen.root and root == to_dir:
         new_root = root.parent / frozen.root
         if root != new_root:
             print('moving {0} to {1}'.format(root, new_root))
             root.rename(new_root)
+
+
+def make_file_dict(path, rel_path, format, checksum, metadata):
+    dict = {
+        'path': rel_path.as_posix(),
+        'format': format,
+        'checksum': checksum,
+        'metadata': metadata,
+    }
+
+    if args.backup:
+        stat = os.stat(path)
+        dict['stat'] = {
+            'mtime': stat.st_mtime,
+            'size': stat.st_size,
+        }
+    else:
+        dict['stat'] = None
+
+    return dict
 
 
 def freeze():
@@ -273,58 +361,98 @@ def freeze():
             'Interrupted freezetag data found at {0}.\n'
             'Run freezetag thaw again, or delete this directory.'.format(tmp_paths[0]))
 
+    existing = {}
     files = []
     music_checksums = []
     metadata_checksums = []
+    last_ftag = (None, 0)
+    reprinter = Reprinter()
+
+    reprinter.print('Collecting metadata...')
+
+    if args.backup:
+        for f in root.iterdir():
+            if not re.match('F\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.ftag', f.name):
+                continue
+            mtime = os.stat(f).st_mtime
+            if mtime > last_ftag[1]:
+                last_ftag = (f, mtime)
+        if last_ftag[0]:
+            with open(last_ftag[0], 'rb') as last_file:
+                last_ftag_bytes = last_file.read()
+            last_ftag_parsed = FreezeFormat.parse(last_ftag_bytes)
+            for f in last_ftag_parsed.frozen.files:
+                existing[f.path] = f
+
+    existing_path_count = 0
 
     for path, rel_path in walk_dir(root):
-        filetype = filetype_for_extension.get(path.suffix.lower(), None)
+        added = False
+        if str(rel_path) in existing:
+            stat = os.stat(rel_path)
+            f = existing[str(rel_path)]
+            if stat.st_size == f.stat.size and abs(stat.st_mtime - f.stat.mtime) < 1e-3:
+                files.append(f)
+                added = True
+                existing_path_count += 1
+
+        filetype = filetype_for_extension.get(path.suffix.lower())
         if not filetype:
-            dict = {
-                'path': rel_path.as_posix(),
-                'format': 0,
-                'checksum': hash_file(path),
-                'metadata': None,
-            }
-            files.append(dict)
-            print('{0} {1}'.format(dict['checksum'].hex(), dict['path']))
+            if not added:
+                files.append(make_file_dict(path, rel_path, 0, hash_file(path), None))
+            reprinter.print('Collecting metadata...{0}'.format(rel_path))
             continue
 
-        music = parse_file(filetype, path)
-        metadata = music.strip()
+        if added:
+            metadata = f.metadata
+            music_checksum = f.checksum
+        else:
+            music = parse_file(filetype, path)
+            metadata = music.strip()
+            music_checksum = hash_bytes(filetype.format.build(music.instance))
+
         metadata_checksum = hash_bytes(filetype.metadata_format.build(metadata))
         metadata_checksums.append(metadata_checksum)
-        music_checksum = hash_bytes(filetype.format.build(music.instance))
         music_checksums.append(music_checksum)
 
-        dict = {
-            'path': rel_path.as_posix(),
-            'format': registered_filetypes.index(filetype) + 1,
-            'checksum': music_checksum,
-            'metadata': metadata,
-        }
+        if not added:
+            files.append(make_file_dict(path, rel_path, registered_filetypes.index(filetype) + 1, music_checksum, metadata))
 
-        files.append(dict)
-        print('{0} {1}'.format(music_checksum.hex(), dict['path']))
+        reprinter.print('Collecting metadata...{0}'.format(rel_path))
+
+    reprinter.print('Collecting metadata...done')
+    print()
 
     if not len(music_checksums):
         raise FreezeTagException('No music files found.')
 
-    data = {
+    if existing_path_count == len(existing) and existing_path_count == len(files)\
+            and last_ftag_parsed.frozen.root == root.name:
+        print('No changes since last freezetag ({0}).'.format(last_ftag[0].name))
+        return
+
+    print('Building freezetag...')
+
+    freezetag = {
         'signature': b'freezetag',
-        'version': VERSION,
-        'music_checksum': hash_bytes(b''.join(sorted(music_checksums)))[0:8],
-        'metadata_checksum': hash_bytes(b''.join(sorted(metadata_checksums)))[0:4],
-        'root': root.name,
-        'files': files,
+        'version': 2 if args.backup else 1,
+        'frozen': {
+            'mode': 1 if args.backup else 0,
+            'music_checksum': hash_bytes(b''.join(sorted(music_checksums)))[0:8],
+            'metadata_checksum': hash_bytes(b''.join(sorted(metadata_checksums)))[0:4],
+            'root': root.name,
+            'files': files,
+        },
     }
 
-    frozen_bytes = FreezeFormat.build(data)
-    freeze_file = root / (get_id(data, frozen_bytes) + '.ftag')
+    freezetag_bytes = FreezeFormat.build(freezetag)
+    freezetag_id = get_id(freezetag, freezetag_bytes)
+    filename = 'F' + datetime.now().strftime('%Y-%m-%d_%H-%M-%S') if args.backup else freezetag_id
+    freeze_file = root / '{0}.ftag'.format(filename)
     with open(freeze_file, 'wb') as f:
-        f.write(frozen_bytes)
+        f.write(freezetag_bytes)
 
-    print('freezetag created at {0}'.format(freeze_file))
+    print('Freezetag created at {0}'.format(freeze_file))
 
 
 def show():
@@ -334,17 +462,20 @@ def show():
         ftag = find_ftag()
 
     with open(ftag, 'rb') as f:
-        frozen_bytes = f.read()
-    frozen = FreezeFormat.parse(frozen_bytes)
+        freezetag_bytes = f.read()
+    freezetag = FreezeFormat.parse(freezetag_bytes)
 
-    if frozen.version > VERSION:
+    if freezetag.version > VERSION:
         raise FreezeTagException('Freezetag file version greater than freezetag version ({0} > {1}).\n'
-                                 'Update freezetag and try again.'.format(frozen.version, VERSION))
+                                 'Update freezetag and try again.'.format(freezetag.version, VERSION))
+
+    frozen = freezetag.frozen
 
     if args.json:
         pprint.pprint({
-            'version': frozen.version,
-            'id': get_id(frozen, frozen_bytes),
+            'version': freezetag.version,
+            'mode': freeze_modes[frozen.mode],
+            'id': get_id(freezetag, freezetag_bytes),
             'root': frozen.root,
             'files': [{
                 'path': f.path,
@@ -352,8 +483,9 @@ def show():
             } for f in frozen.files],
         })
     else:
-        print('version: {0}'.format(frozen.version))
-        print('id:      {0}'.format(get_id(frozen, frozen_bytes)))
+        print('version: {0}'.format(freezetag.version))
+        print('mode:    {0}'.format(freeze_modes[frozen.mode]))
+        print('id:      {0}'.format(get_id(freezetag, freezetag_bytes)))
         print('root:    {0} '.format(frozen.root))
         for f in frozen.files:
             print('{0} {1}'.format(f.checksum.hex(), f.path))
@@ -362,15 +494,15 @@ def show():
 args = parse_args()
 root = Path(args.directory).resolve()
 
+commands = {
+    'freeze': freeze,
+    'thaw': thaw,
+    'shave': shave,
+    'show': show,
+}
+
 try:
-    if args.command == 'freeze':
-        freeze()
-    elif args.command == 'thaw':
-        thaw()
-    elif args.command == 'shave':
-        shave()
-    elif args.command == 'show':
-        show()
+    commands[args.command]()
 except FreezeTagException as e:
     print(e, file=sys.stderr)
     sys.exit(1)
