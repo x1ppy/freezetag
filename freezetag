@@ -56,11 +56,12 @@ def parse_args():
         return sub.add_parser(command, help=help, description=help + description,
                               formatter_class=argparse.RawTextHelpFormatter, parents=[parent])
 
-    freeze = add_subparser('freeze', 'Saves paths and music metadata in directory to a freezetag file.',
+    freeze = add_subparser('freeze',
+            'Saves paths and music metadata in `directory` to a freezetag file.',
         '\n\nMusic files with supported extensions (.mp3, .flac) will have their metadata'
           '\nsaved in the .ftag file. All files will have their paths saved in the .ftag'
           '\nfile. Metadata and path state can be restored using "freezetag thaw".'
-        '\n\nThe freezetag file will be saved in directory. Unless --backup is used, the'
+        '\n\nThe freezetag file will be saved in `directory`. Unless --backup is used, the'
           '\nfreezetag file will be named Fa-b-c.ftag, where:'
           '\n  a is a 16-character segment that uniquely identifies the music'
           '\n  b is an 8-character segment that uniquely identifies the metadata'
@@ -73,25 +74,34 @@ def parse_args():
           '\nsegments, they represent the same set of raw music AND their metadata.'
     )
 
-    thaw = add_subparser('thaw', 'Restores paths and music metdata in directory from a freezetag file.')
+    thaw = add_subparser('thaw',
+        'Restores paths and music metadata in `directory` from a freezetag file.')
+
     shave = add_subparser('shave', 'Strips metadata from all music files in directory.',
             '\n\nOnly music files with supported extensions (.mp3, .flac) will be modified,'
               '\nand only supported metadata (Vorbis comments, ID3) will be stripped.')
+
     show = add_subparser('show', 'Displays the contents of a freezetag file.')
 
     for parser in [freeze, thaw, shave]:
         parser.add_argument('directory', nargs='?', default=Path.cwd(),
             help='Directory to process (default: current directory).')
 
-    show.add_argument('directory', nargs='?', metavar='path', default=Path.cwd(),
-        help='Directory containing .ftag file, or .ftag file itself\n'
+    show.add_argument('path', nargs='?', metavar='path', default=Path.cwd(),
+        help='Directory containing .ftag file, or the .ftag file itself\n'
              '(default: current directory)')
     show.add_argument('--json', action='store_true', help='Prints JSON output.')
 
-    thaw.add_argument('--ftag', metavar='file', help='Freezetag file to use. Uses the .ftag in directory by default.')
+    thaw.add_argument('--ftag', metavar='path',
+        help='Path to Freezetag file to use.'
+         '\n\nIf path is a directory, the .ftag in this directory will be'
+           '\nused. Otherwise, path must be an .ftag file that will be used'
+           '\nto thaw.'
+         '\n\nIf --ftag is not specified, the .ftag in `directory` will be'
+           '\nused.')
     thaw.add_argument('--to', metavar='directory',
         help='Directory to which thawed state will be restored. By default,'
-        '\nthe state will be restored in-place to directory, replacing'
+        '\nthe state will be restored in-place to `directory`, replacing'
         '\nexisting tags and paths.')
 
     freeze.add_argument('--backup', action='store_true',
@@ -105,6 +115,14 @@ def parse_args():
           '\nread. Any files whose names haven\'t changed will not have their'
           '\nhashes recalculated, making the freeze operation significantly'
           '\nfaster.')
+    freeze.add_argument('--ftag', metavar='path',
+        help='Path to output freezetag file.'
+        '\n\nIf path is a directory, the freezetag file will be written to'
+          '\nthis directory, following the naming specifications outlined'
+          '\nabove. Otherwise, the freezetag file will be named and saved'
+          '\naccording to the given path.'
+       '\n\nIf --ftag is not specified, the freezetag file will be written'
+         '\nto `directory`.')
 
     return main.parse_args()
 
@@ -176,11 +194,17 @@ def get_id(freezetag, freezetag_bytes):
                            checksum.hex()])
 
 
-def find_ftag():
-    freezetag_paths = [p for p in root.iterdir() if p.suffix.lower() == '.ftag']
+def find_ftag(path):
+    if not path.exists():
+        raise FreezeTagException('Given ftag is not a file or directory: {0}'.format(path))
+
+    if path.is_file():
+        return path
+
+    freezetag_paths = [p for p in path.iterdir() if p.suffix.lower() == '.ftag']
 
     if not len(freezetag_paths):
-        raise FreezeTagException('No freezetag file found in {0}'.format(root))
+        raise FreezeTagException('No freezetag file found in {0}'.format(path))
 
     index = 0
 
@@ -219,6 +243,8 @@ def parse_file(filetype, path):
 
 
 def shave():
+    root = Path(args.directory).resolve()
+
     for path, rel_path in walk_dir(root):
         filetype = filetype_for_extension.get(path.suffix.lower(), None)
         if not filetype:
@@ -239,10 +265,8 @@ def shave():
 
 
 def thaw():
-    if args.ftag:
-        ftag = Path(args.ftag)
-    else:
-        ftag = find_ftag()
+    root = Path(args.directory).resolve()
+    ftag = find_ftag(Path(args.ftag or root))
 
     freeeztag = FreezeFormat.parse_file(ftag)
     tmpdir = ftag.with_suffix('.ftag-tmp')
@@ -355,6 +379,7 @@ def make_file_dict(path, rel_path, format, checksum, metadata):
 
 
 def freeze():
+    root = Path(args.directory).resolve()
     tmp_paths = [p for p in root.iterdir() if p.suffix.lower() == '.ftag-tmp']
 
     if len(tmp_paths):
@@ -362,6 +387,7 @@ def freeze():
             'Interrupted freezetag data found at {0}.\n'
             'Run freezetag thaw again, or delete this directory.'.format(tmp_paths[0]))
 
+    to_path = Path(args.ftag or root)
     existing = {}
     files = []
     music_checksums = []
@@ -372,7 +398,8 @@ def freeze():
     reprinter.print('Collecting metadata...')
 
     if args.backup:
-        for f in root.iterdir():
+        to_dir = to_path if to_path.is_dir() else to_path.parent
+        for f in to_dir.iterdir():
             if not re.match('F\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.ftag', f.name):
                 continue
             mtime = os.stat(f).st_mtime
@@ -390,7 +417,7 @@ def freeze():
     for path, rel_path in walk_dir(root):
         added = False
         if str(rel_path) in existing:
-            stat = os.stat(rel_path)
+            stat = os.stat(path)
             f = existing[str(rel_path)]
             if stat.st_size == f.stat.size and abs(stat.st_mtime - f.stat.mtime) < 1e-3:
                 files.append(f)
@@ -421,7 +448,7 @@ def freeze():
 
         reprinter.print('Collecting metadata...{0}'.format(rel_path))
 
-    reprinter.print('Collecting metadata...done')
+    reprinter.print('Collecting metadata...done.')
     print()
 
     if not len(music_checksums):
@@ -447,20 +474,20 @@ def freeze():
     }
 
     freezetag_bytes = FreezeFormat.build(freezetag)
-    freezetag_id = get_id(freezetag, freezetag_bytes)
-    filename = 'F' + datetime.now().strftime('%Y-%m-%d_%H-%M-%S') if args.backup else freezetag_id
-    freeze_file = root / '{0}.ftag'.format(filename)
-    with open(freeze_file, 'wb') as f:
+
+    if to_path.is_dir():
+        freezetag_id = get_id(freezetag, freezetag_bytes)
+        filename = 'F' + datetime.now().strftime('%Y-%m-%d_%H-%M-%S') if args.backup else freezetag_id
+        to_path = to_path / '{0}.ftag'.format(filename)
+
+    with open(to_path, 'wb') as f:
         f.write(freezetag_bytes)
 
-    print('Freezetag created at {0}'.format(freeze_file))
+    print('Freezetag created at {0}'.format(to_path))
 
 
 def show():
-    if Path(args.directory).suffix == '.ftag':
-        ftag = Path(args.directory)
-    else:
-        ftag = find_ftag()
+    ftag = find_ftag(Path(args.path))
 
     with open(ftag, 'rb') as f:
         freezetag_bytes = f.read()
@@ -493,7 +520,6 @@ def show():
 
 
 args = parse_args()
-root = Path(args.directory).resolve()
 
 commands = {
     'freeze': freeze,
