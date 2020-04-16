@@ -262,6 +262,7 @@ Changelog
 * Added `freeze --backup` for incremental backups
 * Added `freeze --ftag` for custom output path
 * Fixed `show --json` to properly dump JSON
+* In-place now `thaw` deletes processed files immediately to reduce temporary disk usage
 ### [1.0.4] - 2020-04-10
 * Don't delete files on thaw if they aren't listed in ftag
 ### [1.0.3] - 2020-04-09

@@ -49,6 +49,8 @@ class FlacFile:
         return metadata
 
     def restore_metadata(self, metadata):
+        self.strip()
+
         # Append the frozen metadata to the stripped media.
         self.instance.metadata[0].info.last = not len(metadata)
         self.instance.metadata += metadata
