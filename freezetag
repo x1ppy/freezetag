@@ -107,6 +107,17 @@ def parse_args():
     thaw.add_argument('--to', metavar='directory',
         help='Directory to which thawed files will be copied and restored.'
            '\nIf omitted, files will be renamed and restored in-place.')
+    thaw.add_argument('--skip-checks', action='store_true',
+        help='Skips safety checks.'
+         '\n\nBy default, thaw verifies that (1) all music files in the'
+           '\nfreezetag are in `directory`, and (2) `directory` doesn\'t'
+           '\ncontain unrecognized files when the common music path doesn\'t'
+           '\nmatch `directory`. The user will be prompted if either of'
+           '\nthese conditions is not met.'
+         '\n\nThese checks help prevent unintentional file/directory changes'
+           '\nif thaw is called with the wrong `directory`; however, the'
+           '\nthaw will take longer and requires user interaction for prompts.'
+           '\nPass --skip-checks to disable these checks.')
 
     freeze.add_argument('--backup', action='store_true',
         help='Freeze in incremental backup mode.'
@@ -250,6 +261,8 @@ def parse_file(filetype, path):
 
 def shave():
     root = Path(args.directory).resolve()
+    if not root.exists():
+        raise FreezeTagException('Directory does not exist: {0}'.format(root))
 
     for path, rel_path in walk_dir(root):
         filetype = filetype_for_extension.get(path.suffix.lower(), None)
@@ -270,55 +283,36 @@ def shave():
         music.format.build_file(music.instance, path)
 
 
-def thaw():
-    root = Path(args.directory).resolve()
-    ftag = find_ftag(Path(args.ftag or root))
+def strip_item(path):
+    filetype = filetype_for_extension.get(path.suffix.lower())
+    if not filetype:
+        return (None, hash_file(path))
 
-    freeeztag = FreezeFormat.parse_file(ftag)
+    music = parse_file(filetype, path)
+    music.strip()
+    checksum = hash_bytes(filetype.format.build(music.instance))
+    return (music, checksum)
 
-    if freeeztag.version > VERSION:
-        raise FreezeTagException('Freezetag file version greater than freezetag version ({0} > {1}).\n'
-                                 'Update freezetag and try again.'.format(freeeztag.version, VERSION))
 
-    frozen = freeeztag.frozen
-    to_dir = Path(args.to).resolve() / frozen.root if args.to else root
-    tmp_dir = root / ftag.with_suffix('.ftag-tmp').name
-    thaw_in_place = root == to_dir
-
-    # Map each checksum to an array of files in case multiple files with identical checksums were frozen.
-    file_map = {}
-    for f in frozen.files:
-        if f.checksum not in file_map:
-            file_map[f.checksum] = [[], False]
-        file_map[f.checksum][0].append(f)
-
-    print('Processing {0}...'.format(root))
-
-    reprinter = Reprinter()
-
-    # First pass: verify directory and calculate checksums.
-    paths = []
+def prepare_thaw(root, frozen, thaw_in_place, checksum_to_item):
+    paths = {}
     commonpath = None
     unrecognized_found = False
+    reprinter = Reprinter()
+
     for path, rel_path in walk_dir(root):
         reprinter.print('Checking...{0}'.format(rel_path))
 
-        filetype = filetype_for_extension.get(path.suffix.lower())
-        if not filetype:
-            checksum = hash_file(path)
-        else:
-            music = parse_file(filetype, path)
-            music.strip()
-            checksum = hash_bytes(filetype.format.build(music.instance))
+        _, checksum = strip_item(path)
 
-        if checksum not in file_map:
+        if checksum not in checksum_to_item:
             unrecognized_found = True
             reprinter.print('    Unrecognized file: {0}'.format(path))
             print()
             continue
 
-        file_map[checksum][1] = True
-        paths.append((path, rel_path, file_map[checksum], filetype))
+        checksum_to_item[checksum][1] = True
+        paths[rel_path] = checksum_to_item[checksum]
         commonpath = os.path.commonpath(list(filter(None, [commonpath, path])))
 
     reprinter.print('Checking...done.')
@@ -339,7 +333,7 @@ def thaw():
 
     missing_music = False
     for file in frozen.files:
-        if not file_map[file.checksum][1]:
+        if not checksum_to_item[file.checksum][1]:
             print('    Missing: {0} ({1})'.format(file.path, file.checksum.hex()), file=sys.stderr)
             if file.format:
                 missing_music = True
@@ -353,18 +347,67 @@ def thaw():
             if choice == 'n':
                 sys.exit(0)
 
+    return paths
+
+
+def thaw():
+    root = Path(args.directory).resolve()
+    if not root.exists():
+        raise FreezeTagException('Directory does not exist: {0}'.format(root))
+
+    ftag = find_ftag(Path(args.ftag or root))
+    freezetag = FreezeFormat.parse_file(ftag)
+
+    if freezetag.version > VERSION:
+        raise FreezeTagException('Freezetag file version greater than freezetag version ({0} > {1}).\n'
+                                 'Update freezetag and try again.'.format(freezetag.version, VERSION))
+
+    frozen = freezetag.frozen
+    to_dir = Path(args.to).resolve() / frozen.root if args.to else root
+    tmp_dir = root / ftag.with_suffix('.ftag-tmp').name
+    thaw_in_place = root == to_dir
+
+    # Map each checksum to an array of files in case multiple files with identical checksums were frozen.
+    checksum_to_item = {}
+    for f in frozen.files:
+        if f.checksum not in checksum_to_item:
+            checksum_to_item[f.checksum] = [[], False, False]
+        checksum_to_item[f.checksum][0].append(f)
+
+    print('Processing {0}...'.format(root))
+
+    # First pass: verify directory and calculate checksums.
+    path_to_item = None
+    if not args.skip_checks:
+        path_to_item = prepare_thaw(root, frozen, thaw_in_place, checksum_to_item)
+
+    reprinter = Reprinter()
+
     import_fn = shutil.move if thaw_in_place else shutil.copy2
 
     # Second pass: move (or copy) files to tmp_dir and update their metadata.
-    for path, rel_path, item, filetype in paths:
+    for path, rel_path in walk_dir(root):
+        music = None
+
+        if path_to_item:
+            if rel_path not in path_to_item:
+                continue
+            item = path_to_item[rel_path]
+        else:
+            music, checksum = strip_item(path)
+            if checksum not in checksum_to_item:
+                continue
+            item = checksum_to_item[checksum]
+
         reprinter.print('Thawing metadata...{0}'.format(rel_path))
 
-        if not item[1]:
+        if item[2]:
             continue
 
-        item[1] = False
-
+        item[2] = True
         num_files = len(item[0])
+        filetype = filetype_for_extension.get(path.suffix.lower())
+
         for file in item[0]:
             to_path = tmp_dir / file.path
             to_path.parent.mkdir(parents=True, exist_ok=True)
@@ -376,7 +419,9 @@ def thaw():
                     pass
                 continue
 
-            music = parse_file(filetype, path)
+            if not music:
+                music = parse_file(filetype, path)
+
             music.restore_metadata(file.metadata)
             filetype.format.build_file(music.instance, to_path)
 
@@ -431,6 +476,9 @@ def make_file_dict(path, rel_path, format, checksum, metadata):
 
 def freeze():
     root = Path(args.directory).resolve()
+    if not root.exists():
+        raise FreezeTagException('Directory does not exist: {0}'.format(root))
+
     tmp_paths = [p for p in root.iterdir() if p.suffix.lower() == '.ftag-tmp']
 
     # We're trying to create a new freeze state, but we found existing freezetag tmp

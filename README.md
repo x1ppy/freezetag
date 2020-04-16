@@ -264,6 +264,7 @@ Changelog
 * Fixed `show --json` to properly dump JSON
 * In-place now `thaw` deletes processed files immediately to reduce temporary disk usage
 * Created safety checks and prompts for `thaw`
+* Added `thaw --skip-checks` to allow skipping checks
 ### [1.0.4] - 2020-04-10
 * Don't delete files on thaw if they aren't listed in ftag
 ### [1.0.3] - 2020-04-09
