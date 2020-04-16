@@ -6,6 +6,33 @@ Installation
 
     $> pip install git+https://github.com/x1ppy/freezetag
 
+About
+-----
+
+`freezetag` is a tool that saves, strips, and restores file paths and music metadata. This metadata information is
+written to a freezetag file (usually just a few kB) that can transform downloaded music files between different
+filename/tag states.
+
+Potential use cases:
+1. Users can automatically generate freezetags when they download a torrent, before they import/rename/retag the music
+into their library of choice. Later, if they want to restore the torrent (e.g., to reseed), they can use `freezetag` to
+restore the original torrent state. Alternatively, rather than always generating freezetags on their own, users could
+share freezetags amongst themselves or via some database.
+2. Similarly, users can seed torrents between different trackers using a freezetag file, even if the torrents have been
+renamed/retagged.
+3. `freezetag` can separate the music from its metadata, letting users share bare, untagged music with a separate
+freezetag file. Theoretically, these bare music files could be included in different distributions of the same music
+across different trackers, where only the freezetag file would differ.
+4. Since bare music files are uniquely identifiable, freezetag IDs could provide an alternative to torrent info hashes.
+`freezetag` could theoretically be used to pair tracker releases to users' existing downloads that have already been
+retagged and renamed. This would, for instance, allow users to automatically generate
+[origin.yaml](https://github.com/x1ppy/gazelle-origin) files for their existing downloads that don't have origin files,
+where there would otherwise be no way to link them.
+
+In an ideal distant future, trackers could provide freezetags alongside their corresponding torrent download links, and
+they could have an API to query freezetag IDs that would return a specific release (this would be a prerequisite to use
+case #4 above).
+
 Usage
 -----
 
@@ -16,9 +43,9 @@ Saves, strips, and restores file paths and music metadata.
 
 positional arguments:
   command
-    freeze    Saves paths and music metadata in directory to a freezetag file.
-    thaw      Restores paths and music metdata in directory from a freezetag file.
-    shave     Strips metadata from all music files in directory.
+    freeze    Saves paths and music metadata to a freezetag file.
+    thaw      Restores paths and music metadata from a freezetag file.
+    shave     Strips metadata from all music files.
     show      Displays the contents of a freezetag file.
 
 optional arguments:
@@ -44,173 +71,108 @@ formats will be processed.
 Examples
 --------
 
-First, let's prepare a minimal music set:
-
-    $> mkdir beethoven-example && cd beethoven-example
-    $> wget https://www.mfiles.co.uk/mp3-downloads/Beethoven-Symphony5-1.mp3
-    $> wget https://www.mfiles.co.uk/mp3-downloads/fur-elise.mp3
-    $> wget https://www.mfiles.co.uk/mp3-downloads/sugar-plum-fairy.mp3
-
-and check the tags:
-
-    $> id3ted -l *
-    Beethoven-Symphony5-1.mp3
-    ID3v1:
-    Title  : Symphony No.5 - 1st movement    Track: 0
-    Artist : Ludwig van Beethoven            Year :
-    Album  : www.mfiles.co.uk                Genre: Classical (32)
-    Comment: © Music Files Ltd
-
-    fur-elise.mp3:
-    ID3v1:
-    Title  : Fur Elise (album leaf) - Piano  Track: 0
-    Artist : Ludwig van Beethoven            Year :
-    Album  : www.mfiles.co.uk                Genre: Classical (32)
-    Comment: © Music Files Ltd
-
-    sugar-plum-fairy.mp3:
-    ID3v1:
-    Title  : Sugar Plum Fairy (Nutcracker)   Track: 0
-    Artist : Peter Tchaikovsky               Year :
-    Album  : www.mfiles.co.uk                Genre: Classical (32)
-    Comment: © Music Files Ltd
-
 ### freeze
 
-To kick things off, run `freezetag freeze`:
+Create a freezetag that stores paths and metadata for all files in this directory, saving the freezetag to a file
+named F**a**-**b**-**c**.ftag (as described in [Freezetag ID](#freezetag-id)) to this directory:
 
     $> freezetag freeze
-    455d965a07357826e76118a3c84ffbac0463fde0 Beethoven-Symphony5-1.mp3
-    6f860819575aa0bef153b9d1477030bb9f91d27d fur-elise.mp3
-    6fa39dfda7512e26a6dca13579a7739279e1d193 sugar-plum-fairy.mp3
-    freezetag created at /home/x1ppy/beethoven-example/Ff347f70000e23124-863f2c3d-2675d4d7.ftag
 
-If you check the contents of the directory, nothing has changed other than the new file
-`Ff347f70000e23124-863f2c3d-2675d4d7.ftag`.
+Same as above, except `downloads/Pink Floyd - Dark Side of the Moon (1973 MSFL UDCD 517) - FLAC` is used instead of the
+current directory:
+
+    $> freezetag freeze "downloads/Pink Floyd - Dark Side of the Moon (1973 MSFL UDCD 517) - FLAC"
+
+If `--ftag` is passed, the freezetag will be written to that directory instead of the directory being frozen:
+
+    $> freezetag freeze --ftag ~/ftags
+
+Or, if the `--ftag` argument is a file, the freezetag will be explicitly named (`redacted-pink-floyd-the-wall.ftag` in
+this case):
+
+    $> freezetag freeze --ftag ~/ftags/redacted-pink-floyd-the-wall.ftag
+
+These examples all freeze a single album's state. With the default usage, it's recommended that each album has its own
+freezetag, as shown here. This way, other directories under `downloads` can be added/changed/removed without affecting
+the freezetag corresponding to each individual download. Freezetags are unique for a given group of files with the same
+metadata, so album-level freezetags can be shared among users to recreate the exact torrent download state. In fact, if
+two users independently create freezetags for the same downloaded directory, the freezetags (and their IDs) will be
+identical.
+
+`freezetag freeze` also includes an incremental backup mode, enabled with the `--backup` flag:
+
+    $> freezetag freeze ~/music --backup
+
+This mode is intended to be used on your top-level music directory, and allows you to export all of your personal tags.
+`freezetag thaw` can later be used on the original torrent downloads in your `~/downloads` directory to fully recreate
+your personal tagged library.
+
+Unlike the default mode, backup mode writes last modified dates and file sizes to the freezetag. This enables
+incremental backups, meaning that the original `freezetag freeze --backup` of your library can take awhile (minutes to
+hours depending on the size of your library), but subsequent `freezetag freeze --backup`s can complete in mere seconds.
+Only the most recent freezetag will be read for an incremental backup, and if the library is unchanged since the last
+backup, a new freezetag will not be created.
+
+Backup freezetags follow a different naming scheme, and will be named F**yyyy**-**MM**-**dd**\_**hh**-**mm**-**ss**.ftag
+using the date of creation.
 
 ### thaw
 
-Now, let's make things interesting by modifying our files:
-
-    $> mv Beethoven-Symphony5-1.mp3 01-symphany.mp3
-    $> mv fur-elise.mp3 02-fur-elise.mp3
-    $> mv sugar-plum-fairy.mp3 03-sugar-plum-fairy.mp3
-    $> id3ted 01-symphany.mp3 -A "Custom Album" -y 1808 -T 1
-    $> id3ted 02-fur-elise.mp3 -A "Custom Album" -y 1808 -T 2
-    $> id3ted 03-sugar-plum-fairy.mp3 -A "Custom Album" -y 1808 -T 3
-
-and checking the tags again:
-
-    $> id3ted -l *
-    01-symphany.mp3:
-    ID3v1:
-    Title  : Symphony No.5 - 1st movement    Track: 1
-    Artist : Ludwig van Beethoven            Year : 1808
-    Album  : Custom Album                    Genre: Classical (32)
-    Comment: © Music Files Ltd
-
-    02-fur-elise.mp3:
-    ID3v1:
-    Title  : Fur Elise (album leaf) - Piano  Track: 2
-    Artist : Ludwig van Beethoven            Year : 1808
-    Album  : Custom Album                    Genre: Classical (32)
-    Comment: © Music Files Ltd
-
-    03-sugar-plum-fairy.mp3:
-    ID3v1:
-    Title  : Sugar Plum Fairy (Nutcracker)   Track: 3
-    Artist : Peter Tchaikovsky               Year : 1808
-    Album  : Custom Album                    Genre: Classical (32)
-    Comment: © Music Files Ltd
-
-At this point, we've renamed and retagged our album -- all standard stuff in the music world. At this point, our
-original tags and filenames are long gone, so if we wanted to reset the tags and filenames (to share with others, for
-example), we'd have to redownload the original files again. Or do we?
-
-Let's run `freezetag thaw`:
+Restore files in-place in the current directory to the freezetag state, using whatever freezetag is in the current
+directory (prompting the user if multiple `.ftag`s exist):
 
     $> freezetag thaw
-    455d965a07357826e76118a3c84ffbac0463fde0 Beethoven-Symphony5-1.mp3
-        thawing /home/x1ppy/beethoven-example/01-symphany.mp3
-    6f860819575aa0bef153b9d1477030bb9f91d27d fur-elise.mp3
-        thawing /home/x1ppy/beethoven-example/02-fur-elise.mp3
-    6fa39dfda7512e26a6dca13579a7739279e1d193 sugar-plum-fairy.mp3
-        thawing /home/x1ppy/beethoven-example/03-sugar-plum-fairy.mp3
 
-Now, if we list the directory contents, we see that the files are back to their original names:
+Same as above, except `downloads/Pink Floyd - Dark Side of the Moon (1973 MSFL UDCD 517) - FLAC` is used instead of the
+current directory:
 
-    $> ls
-    Beethoven-Symphony5-1.mp3  Ff347f70000e23124-863f2c3d-2675d4d7.ftag  fur-elise.mp3  sugar-plum-fairy.mp3
+    $> freezetag thaw "downloads/Pink Floyd - Dark Side of the Moon (1973 MSFL UDCD 517) - FLAC"
 
-And if we check the tags one last time:
+For parity with `freeze`, `thaw` supports an `--ftag` flag that searches the given directory for a freezetag instead:
 
-    $> id3ted -l *
-    Beethoven-Symphony5-1.mp3:
-    ID3v1:
-    Title  : Symphony No.5 - 1st movement    Track: 0
-    Artist : Ludwig van Beethoven            Year :
-    Album  : www.mfiles.co.uk                Genre: Classical (32)
-    Comment: © Music Files Ltd
+    $> freezetag thaw --ftag ~/ftags
 
-    fur-elise.mp3:
-    ID3v1:
-    Title  : Fur Elise (album leaf) - Piano  Track: 0
-    Artist : Ludwig van Beethoven            Year :
-    Album  : www.mfiles.co.uk                Genre: Classical (32)
-    Comment: © Music Files Ltd
+Or, if a freezetag is explicitly passed with `--ftag`, that freezetag will be used to thaw. The following thaws files
+in-place in the current directory using the given freezetag:
+   
+    $> freezetag thaw --ftag ~/ftags/redacted-pink-floyd-the-wall.ftag
 
-    sugar-plum-fairy.mp3:
-    ID3v1:
-    Title  : Sugar Plum Fairy (Nutcracker)   Track: 0
-    Artist : Peter Tchaikovsky               Year :
-    Album  : www.mfiles.co.uk                Genre: Classical (32)
-    Comment: © Music Files Ltd
+By default, `thaw` will thaw files in-place, meaning files and directories will be moved/modified/created to match the
+freezetag state. If the `--to` flag is passed, no files will be modified, but will instead be copied and thawed to the
+given directory:
 
-we see that everything is back to its original, untouched state.
+    $> freezetag thaw --to ~/out
+
+The thawed files will be written to a subdirectory named according to the `root` directory from the freezetag. The
+`root` is the name of the top directory when the files were frozen. So if we freeze a directory and thaw it with `--to`:
+
+    $> cd "downloads/Pink Floyd - Dark Side of the Moon (1973 MSFL UDCD 517) - FLAC"
+    $> freezetag freeze
+    $> freezetag thaw --to ~/out
+
+This will restore the freezetag state to `~/out/Pink Floyd - Dark Side of the Moon (1973 MSFL UDCD 517) - FLAC`.
+
+Another example:
+
+    $> freezetag thaw ~/downloads --to ~/music --ftag ~/backups
+
+This could be used, for instance, if we wanted to recover our personal backed-up tags (i.e., using `freezetag freeze
+--backup`) from a directory of downloaded music, using a freezetag saved in `~/backups`.
 
 ### shave
 
-Strips all metadata from music files in the directory.
-
-Before:
-
-    $> id3ted -l *
-    Beethoven-Symphony5-1.mp3:
-    ID3v1:
-    Title  : Symphony No.5 - 1st movement    Track: 0
-    Artist : Ludwig van Beethoven            Year :
-    Album  : www.mfiles.co.uk                Genre: Classical (32)
-    Comment: © Music Files Ltd
-
-    fur-elise.mp3:
-    ID3v1:
-    Title  : Fur Elise (album leaf) - Piano  Track: 0
-    Artist : Ludwig van Beethoven            Year :
-    Album  : www.mfiles.co.uk                Genre: Classical (32)
-    Comment: © Music Files Ltd
-
-    sugar-plum-fairy.mp3:
-    ID3v1:
-    Title  : Sugar Plum Fairy (Nutcracker)   Track: 0
-    Artist : Peter Tchaikovsky               Year :
-    Album  : www.mfiles.co.uk                Genre: Classical (32)
-    Comment: © Music Files Ltd
-
-After:
+Strips all metadata from music files in the current directory:
 
     $> freezetag shave
-    Beethoven-Symphony5-1.mp3
-        shaved ID3v1 (128)
-    fur-elise.mp3
-        shaved ID3v1 (128)
-    sugar-plum-fairy.mp3
-        shaved ID3v1 (128)
-    $> id3ted -l *
-    (no output)
+
+Same as above, except `downloads/Pink Floyd - Dark Side of the Moon (1973 MSFL UDCD 517) - FLAC` is used instead of the
+current directory:
+
+    $> freezetag shave  "downloads/Pink Floyd - Dark Side of the Moon (1973 MSFL UDCD 517) - FLAC"
 
 `freezetag shave` can be useful if you want to share the "bare" music files. This has the advantage of smaller overall
-distribution size (especially if the music contains images), and it also has the advantage of separation of concerns.
-That is, users can create and distribute their own freezetag files with bare music files, and the bare music files will
+distribution size (especially if the music contains images), and it allows tags to be shared separately. That is, users
+can create and distribute different freezetag files using the same bare music files, and the bare music files will
 remain unchanged.
 
 ### show
@@ -219,24 +181,47 @@ Shows the contents of a freezetag file.
 
     $> freezetag show
     version: 1
-    id:      Ff347f70000e23124-863f2c3d-2675d4d7
-    root:    beethoven-example
-    455d965a07357826e76118a3c84ffbac0463fde0 Beethoven-Symphony5-1.mp3
-    6f860819575aa0bef153b9d1477030bb9f91d27d fur-elise.mp3
-    6fa39dfda7512e26a6dca13579a7739279e1d193 sugar-plum-fairy.mp3
+    mode:    default
+    id:      Fc58e43e83c0487f5-56ddb165-e8a1171b
+    root:    Pink Floyd - Dark Side of the Moon (1973 MSFL UDCD 517) - FLAC
+    96f5c1b465b263d5090deae5d177df47f0f36efa 01 - Speak To Me.flac
+    dbd1dc0c8ad514d9641919bc52c99010f5cf3ad2 02 - Breathe.flac
+    65cbc81d99b7ed68125b1652819e5fbec7e7a845 03 - On The Run.flac
+    40af1c90071abc0d66dbbfad5be39fac25967b5e 04 - Time.flac
+    a9fe89c25630794252aa3fe6b1e8078a4eb2308d 05 - The Great Gig In The Sky.flac
+    1a3dfb4396cd1c0ccf7804fc66c0e512b65df65d 06 - Money.flac
+    caeaf72fcee0df11c167bea2edffe4f7acbcec72 07 - Us And Them.flac
+    3ed0c16c900d8430f470011ba877fbaa15a5f7ef 08 - Any Colour You Like.flac
+    fee17fdb47c04037d57094ad14260f20cf8e7a83 09 - Brain Damage.flac
+    f3539291afa214e7af868ff9b0f044a372cf9e9b 10 - Eclipse.flac
+    25041f6026518a0e0a0aa4df3c5fdfd62f8001ea Pink Floyd - The Dark Side Of The Moon.log
+    76e4c8325809583bca447ba2d0e9fdaa4b39fa1e Pink Floyd - The Dark Side Of The Moon.m3u
+    15fdc9bc1bbe2646ba3cd076789c805f811f9b10 The Dark Side Of The Moon.cue
 
 You can also use the `--json` flag to get parse-friendly output:
 
     $> freezetag show --json
-    {'files': [{'checksum': '455d965a07357826e76118a3c84ffbac0463fde0',
-                'path': 'Beethoven-Symphony5-1.mp3'},
-               {'checksum': '6f860819575aa0bef153b9d1477030bb9f91d27d',
-                'path': 'fur-elise.mp3'},
-               {'checksum': '6fa39dfda7512e26a6dca13579a7739279e1d193',
-                'path': 'sugar-plum-fairy.mp3'}],
-     'id': 'Ff347f70000e23124-863f2c3d-2675d4d7',
-     'root': 'beethoven-example',
-     'version': 1}
+    {
+      "version": 1,
+      "mode": "default",
+      "id": "Fc58e43e83c0487f5-56ddb165-e8a1171b",
+      "root": "Pink Floyd - Dark Side of the Moon (1973 MSFL UDCD 517) - FLAC",
+      "files": [
+        {
+          "path": "01 - Speak To Me.flac",
+          "checksum": "96f5c1b465b263d5090deae5d177df47f0f36efa"
+        },
+        {
+          "path": "02 - Breathe.flac",
+          "checksum": "dbd1dc0c8ad514d9641919bc52c99010f5cf3ad2"
+        },
+        {
+          "path": "03 - On The Run.flac",
+          "checksum": "65cbc81d99b7ed68125b1652819e5fbec7e7a845"
+        },
+        ...
+      ]
+    }
 
 Freezetag ID
 ------------
@@ -276,7 +261,7 @@ Changelog
 ### [1.0.0] - 2020-04-06
 * Initial release
 
-[1.0.5]: https://github.com/x1ppy/freezetag/compare/1.0.4...1.1.0
+[1.1.0]: https://github.com/x1ppy/freezetag/compare/1.0.4...1.1.0
 [1.0.4]: https://github.com/x1ppy/freezetag/compare/1.0.3...1.0.4
 [1.0.3]: https://github.com/x1ppy/freezetag/compare/1.0.2...1.0.3
 [1.0.2]: https://github.com/x1ppy/freezetag/compare/1.0.1...1.0.2
