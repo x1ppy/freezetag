@@ -324,9 +324,34 @@ def thaw():
     reprinter.print('Checking...done.')
     print()
 
+    if thaw_in_place and unrecognized_found and Path(commonpath) != root:
+        print('\nCommon path ({0}) does not match thaw directory ({1}).'.format(commonpath, root))
+        print("You're thawing in-place, so the structure of {0} will be changed.".format(root))
+        print('This directory may be renamed, and unrecognized files will be left in their paths'
+              ' relative to this directory.')
+        print('Make sure that you didn\'t intend to thaw {0} instead.'.format(commonpath))
+        while True:
+            choice = input('Continue anyway? (y/n): ').lower()
+            if choice == 'y':
+                break
+            if choice == 'n':
+                sys.exit(0)
+
+    missing_music = False
     for file in frozen.files:
         if not file_map[file.checksum][1]:
             print('    Missing: {0} ({1})'.format(file.path, file.checksum.hex()), file=sys.stderr)
+            if file.format:
+                missing_music = True
+
+    if missing_music:
+        print('One or more music files listed in freezetag are missing.')
+        while True:
+            choice = input('Continue anyway? (y/n): ').lower()
+            if choice == 'y':
+                break
+            if choice == 'n':
+                sys.exit(0)
 
     import_fn = shutil.move if thaw_in_place else shutil.copy2
 

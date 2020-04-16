@@ -258,11 +258,12 @@ will be replaced on the second invocation.
 
 Changelog
 ---------
-### [1.1.0] - 2020-04-15
+### [1.1.0] - 2020-04-16
 * Added `freeze --backup` for incremental backups
 * Added `freeze --ftag` for custom output path
 * Fixed `show --json` to properly dump JSON
 * In-place now `thaw` deletes processed files immediately to reduce temporary disk usage
+* Created safety checks and prompts for `thaw`
 ### [1.0.4] - 2020-04-10
 * Don't delete files on thaw if they aren't listed in ftag
 ### [1.0.3] - 2020-04-09
