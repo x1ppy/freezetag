@@ -155,12 +155,15 @@ The thawed files will be written to a subdirectory named according to the `root`
 
 This will restore the freezetag state to `~/out/Pink Floyd - Dark Side of the Moon (1973 MSFL UDCD 517) - FLAC`.
 
-Another example:
+As another example, say we regularly make backups of our music library state:
 
-    $> freezetag thaw ~/downloads --to ~/music --ftag ~/backups
+    $> freezetag freeze ~/music --backup --ftag ~/ftags
 
-This could be used, for instance, if we wanted to recover our personal backed-up tags (i.e., using `freezetag freeze
---backup`) from a directory of downloaded music, using a freezetag saved in `~/backups`.
+We could then recover this backed-up state from a directory of downloaded music:
+
+    $> freezetag thaw ~/downloads --to ~ --ftag ~/ftags
+
+This will restore our library from `~/downloads` to `~/music`, keeping `~/downloads` intact.
 
 ### shave
 
