@@ -243,6 +243,8 @@ will be replaced on the second invocation.
 
 Changelog
 ---------
+### [1.1.1] - 2020-04-16
+* Fixed `thaw` where multiple copies of the same file are frozen
 ### [1.1.0] - 2020-04-16
 * Added `freeze --backup` for incremental backups
 * Added `freeze --ftag` for custom output path
@@ -261,6 +263,7 @@ Changelog
 ### [1.0.0] - 2020-04-06
 * Initial release
 
+[1.1.1]: https://github.com/x1ppy/freezetag/compare/1.1.0...1.1.1
 [1.1.0]: https://github.com/x1ppy/freezetag/compare/1.0.4...1.1.0
 [1.0.4]: https://github.com/x1ppy/freezetag/compare/1.0.3...1.0.4
 [1.0.3]: https://github.com/x1ppy/freezetag/compare/1.0.2...1.0.3

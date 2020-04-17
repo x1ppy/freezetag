@@ -414,7 +414,10 @@ def thaw():
 
             if not filetype:
                 try:
-                    import_fn(path, to_path)
+                    if len(item[0]) == 1:
+                        import_fn(path, to_path)
+                    else:
+                        shutil.copy2(path, to_path)
                 except shutil.SameFileError:
                     pass
                 continue
