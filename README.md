@@ -15,23 +15,26 @@ filename/tag states.
 
 Potential use cases:
 1. Users can automatically generate freezetags when they download a torrent, before they import/rename/retag the music
-into their library of choice. Later, if they want to restore the torrent (e.g., to reseed), they can use `freezetag` to
-restore the original torrent state. Alternatively, rather than always generating freezetags on their own, users could
-share freezetags amongst themselves or via some database.
+   into their library of choice. Later, if they want to restore the torrent (e.g., to reseed), they can use `freezetag`
+   to restore the original torrent state. Alternatively, rather than always generating freezetags on their own, users
+   could share freezetags amongst themselves or via some database.
 2. Similarly, users can seed torrents between different trackers using a freezetag file, even if the torrents have been
-renamed/retagged.
-3. `freezetag` can separate the music from its metadata, letting users share bare, untagged music with a separate
-freezetag file. Theoretically, these bare music files could be included in different distributions of the same music
-across different trackers, where only the freezetag file would differ.
-4. Since bare music files are uniquely identifiable, freezetag IDs could provide an alternative to torrent info hashes.
-`freezetag` could theoretically be used to pair tracker releases to users' existing downloads that have already been
-retagged and renamed. This would, for instance, allow users to automatically generate
-[origin.yaml](https://github.com/x1ppy/gazelle-origin) files for their existing downloads that don't have origin files,
-where there would otherwise be no way to link them.
+   renamed/retagged.
+3. `freezetag` can also be used to generate a single freezetag for an entire music library *after* the music has been
+   retagged (see `--backup` flag for [freeze](#freeze)). This can be useful for small, quick incremental backups that
+   archive your tags and filenames, which can later be restored from the original torrents.
+4. `freezetag` can separate the music from its metadata, letting users share bare, untagged music with a separate
+   freezetag file. Theoretically, these bare music files could be included in different distributions of the same music
+   across different trackers, where only the freezetag file would differ.
+5. Since bare music files are uniquely identifiable, freezetag IDs could provide an alternative to torrent info hashes.
+   `freezetag` could theoretically be used to pair tracker releases to users' existing downloads that have already been
+   retagged and renamed. This would, for instance, allow users to automatically generate
+   [origin.yaml](https://github.com/x1ppy/gazelle-origin) files for their existing downloads that don't have origin
+   files, where there would otherwise be no way to link them.
 
 In an ideal distant future, trackers could provide freezetags alongside their corresponding torrent download links, and
 they could have an API to query freezetag IDs that would return a specific release (this would be a prerequisite to use
-case #4 above).
+case #5 above).
 
 Usage
 -----
@@ -249,7 +252,7 @@ Changelog
 * Added `freeze --backup` for incremental backups
 * Added `freeze --ftag` for custom output path
 * Fixed `show --json` to properly dump JSON
-* In-place now `thaw` deletes processed files immediately to reduce temporary disk usage
+* In-place `thaw` now deletes processed files immediately to reduce temporary disk usage
 * Created safety checks and prompts for `thaw`
 * Added `thaw --skip-checks` to allow skipping checks
 ### [1.0.4] - 2020-04-10
