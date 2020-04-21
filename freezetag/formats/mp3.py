@@ -1,3 +1,4 @@
+from freezetag import base
 from construct import *
 
 
@@ -46,7 +47,7 @@ Id3v2Format = Struct(
     'footer' / If(this.header.flags.footer, Id3v2HeaderFormat),
 )
 
-class Mp3FormatAdapter(Adapter):
+class FormatAdapter(Adapter):
     def _decode(self, obj, context, path):
         return Struct(
             'id3v2_head' / Optional(Id3v2Format),
@@ -69,9 +70,9 @@ class Mp3FormatAdapter(Adapter):
             Terminated,
         ).build(obj)
 
-Mp3Format = Mp3FormatAdapter(GreedyBytes)
+Format = FormatAdapter(GreedyBytes)
 
-Mp3MetadataFormat = Struct(
+FrozenMetadataFormat = Struct(
     'flags' / BitStruct(
         'has_id3v2_head' / Flag,
         'has_id3v2_tail' / Flag,
@@ -84,26 +85,23 @@ Mp3MetadataFormat = Struct(
 )
 
 
-class Mp3File:
-    extension = '.mp3'
-    format = Mp3Format
-    metadata_format = Mp3MetadataFormat
+class MusicMetadata(base.MusicMetadata):
+    def __init__(self, value):
+        super().__init__(FrozenMetadataFormat, value)
 
-    def iter_metadata(metadata):
-        if metadata['flags']['has_id3v2_head']:
-            header = metadata['id3v2_head'].header
+    def __iter__(self):
+        if self.value['flags']['has_id3v2_head']:
+            header = self.value['id3v2_head'].header
             yield 'ID3v2.{0}'.format(header.version_major), header.size
-        if metadata['flags']['has_id3v2_tail']:
-            header = metadata['id3v2_tail'].header
+        if self.value['flags']['has_id3v2_tail']:
+            header = self.value['id3v2_tail'].header
             yield 'ID3v2.{0} (end)'.format(header.version_major), header.size
-        if metadata['flags']['has_id3v1']:
+        if self.value['flags']['has_id3v1']:
             yield 'ID3v1', 128
 
-    def __init__(self, file_bytes):
-        self.instance = Mp3Format.parse(file_bytes)
-
-        # Workaround for https://github.com/construct/construct/issues/852
-        self.instance._io.close()
+class ParsedFile(base.MusicParsedFile):
+    def __init__(self, path):
+        super().__init__(path, Format)
 
     def strip(self):
         metadata = {
@@ -119,11 +117,12 @@ class Mp3File:
         self.instance.id3v2_head = None
         self.instance.id3v2_tail = None
         self.instance.id3v1 = None
-        return metadata
+        return MusicMetadata(metadata)
 
     def restore_metadata(self, metadata):
-        assert(metadata)
-
+        self.instance.id3v2_head = None
+        self.instance.id3v2_tail = None
+        self.instance.id3v1 = None
         self.instance.id3v2_head = metadata.id3v2_head
         self.instance.id3v2_tail = metadata.id3v2_tail
         self.instance.id3v1 = metadata.id3v1

@@ -5,11 +5,18 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="freezetag",
-    version="1.1.1",
+    version="1.2.0",
     author="x1ppy",
     author_email="",
-    packages=['formats'],
-    scripts=['freezetag'],
+    packages=[
+      'freezetag',
+      'freezetag.formats',
+    ],
+    entry_points={
+      'console_scripts': [
+        'freezetag = freezetag.__main__:main',
+      ],
+    },
     description="save, strip, and restore file paths and music metadata",
     long_description=long_description,
     long_description_content_type="text/markdown",

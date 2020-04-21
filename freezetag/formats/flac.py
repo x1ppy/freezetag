@@ -1,3 +1,6 @@
+import hashlib
+import os
+from freezetag import base
 from construct import *
 
 
@@ -11,7 +14,7 @@ BLOCK_TYPES = [
     'PICTURE',
 ]
 
-FlacMetadataFormat = Struct(
+MetadataFormat = Struct(
     'info' / BitStruct(
         'last' / Flag,
         'block_type' / BitsInteger(7),
@@ -20,33 +23,34 @@ FlacMetadataFormat = Struct(
     'data' / Bytes(this.size),
 )
 
-FlacFormat = Struct(
+FrozenMetadataFormat = PrefixedArray(Int8ub, MetadataFormat)
+
+Format = Struct(
     'signature' / Const(b'fLaC'),
-    'metadata' / RepeatUntil(lambda metadata, *_: metadata.info.last, FlacMetadataFormat),
+    'metadata' / RepeatUntil(lambda metadata, *_: metadata.info.last, MetadataFormat),
     'audio' / GreedyBytes,
 )
 
-class FlacFile:
-    extension = '.flac'
-    format = FlacFormat
-    metadata_format = PrefixedArray(Int8ub, FlacMetadataFormat)
 
-    def iter_metadata(metadata):
-        for item in metadata:
+class MusicMetadata(base.MusicMetadata):
+    def __init__(self, value):
+        super().__init__(FrozenMetadataFormat, value)
+
+    def __iter__(self):
+        for item in self.value:
             yield BLOCK_TYPES[item.info.block_type], item.size
 
-    def __init__(self, file_bytes):
-        self.instance = FlacFormat.parse(file_bytes)
 
-        # Workaround for https://github.com/construct/construct/issues/852
-        self.instance._io.close()
+class ParsedFile(base.MusicParsedFile):
+    def __init__(self, path):
+        super().__init__(path, Format)
 
     def strip(self):
         streaminfo = self.instance.metadata[0]
         streaminfo.info.last = True
         metadata = self.instance.metadata[1:]
         self.instance.metadata = [streaminfo]
-        return metadata
+        return MusicMetadata(metadata)
 
     def restore_metadata(self, metadata):
         self.strip()
