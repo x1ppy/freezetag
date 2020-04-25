@@ -1,40 +1,44 @@
 freezetag
 =========
 
+About
+-----
+
+`freezetag` is a tool that saves, strips, and restores file paths and music metadata. This metadata is written to a
+freezetag file (usually just a few kB) that can transform downloaded music files between different filename/tag states.
+
+Use cases:
+1. Freezetags can be generated after a torrent finishes downloading to [freeze](#freeze) the directory state. Later,
+   even after moving, retagging, and renaming those files, the original downloaded state can be restored
+   ([thawed](#thaw)).
+
+2. Additionally, these freezetags can be [mounted](#mount), allowing retagged music to coexist with the original
+   downloaded music files without taking up extra disk space. This means you can retag your music and continue to seed
+   in your torrent client from the same set of files. _Have your cake and eat it too!_
+
+3. In the same vein, users can seed torrents between different trackers with just one copy of the music files, even if
+   the music has been retagged and renamed between trackers.
+
+4. Freezetags can also be generated for an entire music library *after* the music has been retagged to [back up](#--backup)
+   your personal tags. These quick incremental backups will archive your tags and filenames, which can later be restored
+   from the original torrents.
+
+Requirements
+------------
+
+`freezetag` requires Python 3.5.2 or greater (older versions may technically work, but are untested).
+
+A FUSE implementation must also be installed to use [`freezetag mount`](#mount):
+* Windows users can install [WinFsp](https://github.com/billziss-gh/winfsp/releases/latest).
+* Mac users can install FUSE for macOS via `brew cask install osxfuse` or
+  [manually](https://github.com/osxfuse/osxfuse/releases/latest).
+* Linux users can install `fuse2` from their package managers or
+  [manually](https://github.com/libfuse/libfuse/releases/tag/fuse-2.9.9).
+
 Installation
 ------------
 
     $> pip install git+https://github.com/x1ppy/freezetag
-
-About
------
-
-`freezetag` is a tool that saves, strips, and restores file paths and music metadata. This metadata information is
-written to a freezetag file (usually just a few kB) that can transform downloaded music files between different
-filename/tag states.
-
-Potential use cases:
-1. Users can automatically generate freezetags when they download a torrent, before they import/rename/retag the music
-   into their library of choice. Later, if they want to restore the torrent (e.g., to reseed), they can use `freezetag`
-   to restore the original torrent state. Alternatively, rather than always generating freezetags on their own, users
-   could share freezetags amongst themselves or via some database.
-2. Similarly, users can seed torrents between different trackers using a freezetag file, even if the torrents have been
-   renamed/retagged.
-3. `freezetag` can also be used to generate a single freezetag for an entire music library *after* the music has been
-   retagged (see `--backup` flag for [freeze](#freeze)). This can be useful for small, quick incremental backups that
-   archive your tags and filenames, which can later be restored from the original torrents.
-4. `freezetag` can separate the music from its metadata, letting users share bare, untagged music with a separate
-   freezetag file. Theoretically, these bare music files could be included in different distributions of the same music
-   across different trackers, where only the freezetag file would differ.
-5. Since bare music files are uniquely identifiable, freezetag IDs could provide an alternative to torrent info hashes.
-   `freezetag` could theoretically be used to pair tracker releases to users' existing downloads that have already been
-   retagged and renamed. This would, for instance, allow users to automatically generate
-   [origin.yaml](https://github.com/x1ppy/gazelle-origin) files for their existing downloads that don't have origin
-   files, where there would otherwise be no way to link them.
-
-In an ideal distant future, trackers could provide freezetags alongside their corresponding torrent download links, and
-they could have an API to query freezetag IDs that would return a specific release (this would be a prerequisite to use
-case #5 above).
 
 Usage
 -----
@@ -46,10 +50,11 @@ Saves, strips, and restores file paths and music metadata.
 
 positional arguments:
   command
-    freeze    Saves paths and music metadata to a freezetag file.
-    thaw      Restores paths and music metadata from a freezetag file.
-    shave     Strips metadata from all music files.
-    show      Displays the contents of a freezetag file.
+    freeze    Save paths and music metadata to a freezetag file.
+    thaw      Restore paths and music metadata from a freezetag file.
+    mount     Recursively mount a directory and its freezetags.
+    shave     Strip metadata from all music files.
+    show      Display the contents of a freezetag file.
 
 optional arguments:
   -h, --help  show this help message and exit
@@ -60,21 +65,15 @@ Use "freezetag [command] --help" for more information about a command.
 Supported Formats
 -----------------
 
-Currently, the following music formats are supported:
-* FLAC
-* MP3
+Currently, FLAC and MP3 formats are supported. Vorbis comments are supported for FLAC files, and ID3 tags are supported
+for MP3 files.
 
-The following metadata formats are supported:
-* Vorbis comments
-* ID3
-
-Note that metadata will be frozen/thawed/shaved for supported music formats only. Likewise, only supported metadata
-formats will be processed.
+Note that metadata will be frozen/thawed/shaved for supported music and metadata formats only.
 
 Examples
 --------
 
-### freeze
+### `freeze`
 
 Create a freezetag that stores paths and metadata for all files in this directory, saving the freezetag to a file
 named F**a**-**b**-**c**.ftag (as described in [Freezetag ID](#freezetag-id)) to this directory:
@@ -97,10 +96,15 @@ this case):
 
 These examples all freeze a single album's state. With the default usage, it's recommended that each album has its own
 freezetag, as shown here. This way, other directories under `downloads` can be added/changed/removed without affecting
-the freezetag corresponding to each individual download. Freezetags are unique for a given group of files with the same
-metadata, so album-level freezetags can be shared among users to recreate the exact torrent download state. In fact, if
-two users independently create freezetags for the same downloaded directory, the freezetags (and their IDs) will be
-identical.
+the freezetag corresponding to each individual download.
+
+Freezetags are unique for a given group of files with the same metadata, so album-level freezetags can be shared among
+users to recreate the exact torrent download state. In fact, if two users independently create freezetags for the same
+downloaded directory, the freezetags (and their IDs) will be identical. In theory, trackers could even provide
+freezetags alongside download links that match the given releases, and freezetag IDs could be an API-queryable
+alternative to torrent info hashes.
+
+#### `--backup`
 
 `freezetag freeze` also includes an incremental backup mode, enabled with the `--backup` flag:
 
@@ -119,7 +123,7 @@ backup, a new freezetag will not be created.
 Backup freezetags follow a different naming scheme, and will be named F**yyyy**-**MM**-**dd**\_**hh**-**mm**-**ss**.ftag
 using the date of creation.
 
-### thaw
+### `thaw`
 
 Restore files in-place in the current directory to the freezetag state, using whatever freezetag is in the current
 directory (prompting the user if multiple `.ftag`s exist):
@@ -165,7 +169,38 @@ We could then recover this backed-up state from a directory of downloaded music:
 
 This will restore our library from `~/downloads` to `~/music`, keeping `~/downloads` intact.
 
-### shave
+### `mount`
+
+Recursively mount music files and freezetags in `~/music` to `~/freezefs`:
+
+    $> freezetag mount ~/music ~/freezefs
+
+Music files in `~/music` will appear under `~/freezefs` in their original frozen states (paths and tags) from
+corresponding freezetag files found under `~/music`. A file in `~/music` will *not* be mapped to`~/freezefs` if there is
+no freezetag matching that file. On the other hand, a file in `~/music` can be mapped to `~/freezefs` multiple times
+under different paths (and possibly with different tags) if there are multiple freezetags referring to that same file.
+
+`freezetag mount` enables renamed/retagged music to be seeded without requiring copies on disk. For example, let's say
+we download a torrent to `~/downloads/Pink Floyd - Dark Side of the Moon (1973 MSFL UDCD 517) - FLAC`. Assuming our
+personal tagged library is stored under `~/music` and mounted as shown above, we can then:
+1. Run `freezetag freeze `~/downloads/Pink Floyd - Dark Side of the Moon (1973 MSFL UDCD 517) - FLAC` after the torrent
+   finishes.
+2. Retag/rename/move the files (e.g., to `~/music/Pink Floyd/Dark Side of the Moon`). Assuming we also move the
+   freezetag from step 1 along with it, this will automatically make a new `Pink Floyd - Dark Side of the Moon (1973
+   MSFL UDCD 517) - FLAC` directory appear under our mount point (`~/freezefs`).
+3. Point our torrent client to seed the files from `~/freezefs/Pink Floyd - Dark Side of the Moon (1973 MSFL UDCD 517) -
+   FLAC`.
+
+Ideally, the above steps would be automated by your torrent client/music importer.
+
+Mounts are read-only. Mounts are "live", meaning new files added to the source directory will automatically appear under
+the mount point (assuming there's a matching freezetag), and deleted files will automatically disappear. Similarly,
+changes in tags or freezetag files will be reflected automatically.
+
+Note: The initial mount may take awhile depending on how large your library is. Mount metadata is cached on disk, so
+subsequent mounts should activate in just a few seconds.
+
+### `shave`
 
 Strips all metadata from music files in the current directory:
 
@@ -181,7 +216,7 @@ distribution size (especially if the music contains images), and it allows tags 
 can create and distribute different freezetag files using the same bare music files, and the bare music files will
 remain unchanged.
 
-### show
+### `show`
 
 Shows the contents of a freezetag file.
 
@@ -237,18 +272,27 @@ By default, the freezetag file will be saved to the processed directory as F**a*
 * **b** is an 8-character hex string that uniquely identifies the metadata
 * **c** is an 8-character hex string that uniquely identifies the freezetag
 
-The **a** and **b** segments do not change between freezes if any paths change or if any non-music files are modified.
+While this naming scheme might seem unusual, the uniqueness property lets you quickly see whether two freezetags are
+identical simply by comparing their file names:
+
+* The **a** and **b** segments do not change between freezes if any paths change or if any non-music files are modified.
 Additionally, the **a** segment doesn't change if the music files are retagged.
 
-This means if two different .ftag files have the same **a** segment, they represent the same set of raw music. If they
+* This means if two different .ftag files have the same **a** segment, they represent the same set of raw music. If they
 have both the same **a** and **b** segments, they represent the same set of raw music *and* their metadata.
 
-If all three segments are the same, the two freezetag files are identical. Therefore, running `freezetag freeze` twice
+* If all three segments are the same, the two freezetag files are identical. Therefore, running `freezetag freeze` twice
 will only result in a single freezetag file being created: since the ID will stay the same, the existing freezetag file
 will be replaced on the second invocation.
 
+If you use a custom naming scheme for your freezetags (by passing `--ftag` to `freeze`), the ID can still be found using
+`freezetag show`.
+
 Changelog
 ---------
+### [1.2.0] - 2020-04-26
+* Added `mount` command
+* Refactored modules and API
 ### [1.1.1] - 2020-04-16
 * Fixed `thaw` where multiple copies of the same file are frozen
 ### [1.1.0] - 2020-04-16
@@ -269,6 +313,7 @@ Changelog
 ### [1.0.0] - 2020-04-06
 * Initial release
 
+[1.2.0]: https://github.com/x1ppy/freezetag/compare/1.1.1...1.2.0
 [1.1.1]: https://github.com/x1ppy/freezetag/compare/1.1.0...1.1.1
 [1.1.0]: https://github.com/x1ppy/freezetag/compare/1.0.4...1.1.0
 [1.0.4]: https://github.com/x1ppy/freezetag/compare/1.0.3...1.0.4

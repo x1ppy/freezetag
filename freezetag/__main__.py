@@ -2,7 +2,7 @@
 import argparse
 import sys
 from pathlib import Path
-from . import freeze, thaw, shave, show, FreezetagException
+from . import commands
 
 
 def parse_args():
@@ -19,7 +19,7 @@ def parse_args():
                               formatter_class=argparse.RawTextHelpFormatter, parents=[parent])
 
     freeze = add_subparser('freeze',
-            'Saves paths and music metadata to a freezetag file.',
+            'Save paths and music metadata to a freezetag file.',
         '\n\nMusic files with supported extensions (.mp3, .flac) will have their metadata'
           '\nsaved in the .ftag file. All files will have their paths saved in the .ftag'
           '\nfile. Metadata and path state can be restored using "freezetag thaw".'
@@ -36,7 +36,7 @@ def parse_args():
           '\nsegments, they represent the same set of raw music AND their metadata.'
     )
 
-    thaw = add_subparser('thaw', 'Restores paths and music metadata from a freezetag file.',
+    thaw = add_subparser('thaw', 'Restore paths and music metadata from a freezetag file.',
         '\n\nBy default, the files will be renamed and restored in-place inside `directory`.'
            '\nNote that `directory` itself will be renamed to the "root" saved in the'
            '\nfreezetag file.'
@@ -44,11 +44,27 @@ def parse_args():
            '\n(named "root" from the freezetag file) under the `to` directory, leaving the'
            '\nfiles in the source `directory` untouched.')
 
-    shave = add_subparser('shave', 'Strips metadata from all music files.',
+    mount = add_subparser('mount',
+        help='Recursively mount a directory and its freezetags.')
+    mount.add_argument('directory',
+        help='Directory to mount.'
+         '\n\nThis directory will be scanned for freezetags and matching files. Any matches'
+           '\nwill then be mounted as their original state under `mount_point`.'
+        '\n\nMounts are read-only. Mounts are "live", meaning new files added to the source'
+          '\ndirectory will automatically appear under the mount point (assuming there\'s a'
+          '\nmatching freezetag), and deleted files will automatically disappear. Similarly,'
+          '\nchanges in tags or freezetag files will be reflected automatically.'
+        '\n\nNote: The initial mount may take awhile depending on how large your library is.'
+          '\nMount metadata is cached on disk, so subsequent mounts should activate in just'
+          '\na few seconds.')
+    mount.add_argument('--verbose', '-v', action='store_true', help='Verbose mode.')
+    mount.add_argument('mount_point', help='Mount destination.')
+
+    shave = add_subparser('shave', 'Strip metadata from all music files.',
             '\n\nOnly music files with supported extensions (.mp3, .flac) will be modified,'
               '\nand only supported metadata (Vorbis comments, ID3) will be stripped.')
 
-    show = add_subparser('show', 'Displays the contents of a freezetag file.')
+    show = add_subparser('show', 'Display the contents of a freezetag file.')
 
     for parser in [freeze, thaw, shave]:
         parser.add_argument('directory', nargs='?', default=Path.cwd(),
@@ -105,18 +121,10 @@ def parse_args():
 
 
 def main():
-    args = parse_args()
-
-    commands = {
-        'freeze': freeze,
-        'thaw': thaw,
-        'shave': shave,
-        'show': show,
-    }
-
     try:
-        commands[args.command](**vars(args))
-    except FreezetagException as e:
+        args = parse_args()
+        getattr(commands, args.command)(**vars(args))
+    except commands.CommandException as e:
         print(e, file=sys.stderr)
         sys.exit(1)
 

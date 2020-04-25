@@ -45,6 +45,7 @@ Id3v2Format = Struct(
         )),
         'padding' / GreedyBytes)),
     'footer' / If(this.header.flags.footer, Id3v2HeaderFormat),
+    'size' / Computed(lambda this: this.header.size + 10 + (10 if this.footer else 0)),
 )
 
 class FormatAdapter(Adapter):
@@ -90,14 +91,15 @@ class MusicMetadata(base.MusicMetadata):
         super().__init__(FrozenMetadataFormat, value)
 
     def __iter__(self):
-        if self.value['flags']['has_id3v2_head']:
+        if self.value['id3v2_head']:
             header = self.value['id3v2_head'].header
-            yield 'ID3v2.{0}'.format(header.version_major), header.size
-        if self.value['flags']['has_id3v2_tail']:
+            yield 'head-ID3v2.{0}'.format(header.version_major), self.value['id3v2_head'].size
+        if self.value['id3v2_tail']:
             header = self.value['id3v2_tail'].header
-            yield 'ID3v2.{0} (end)'.format(header.version_major), header.size
+            yield 'tail-ID3v2.{0}'.format(header.version_major), self.value['id3v2_tail'].size
         if self.value['flags']['has_id3v1']:
             yield 'ID3v1', 128
+
 
 class ParsedFile(base.MusicParsedFile):
     def __init__(self, path):
@@ -126,3 +128,79 @@ class ParsedFile(base.MusicParsedFile):
         self.instance.id3v2_head = metadata.id3v2_head
         self.instance.id3v2_tail = metadata.id3v2_tail
         self.instance.id3v1 = metadata.id3v1
+
+
+class FuseFile(base.FuseFile):
+    def __init__(self, file_path, flags, metadata, file_metadata_info, file_metadata_len, frozen_metadata_len):
+        super().__init__(file_path, flags, metadata, file_metadata_info, file_metadata_len, frozen_metadata_len)
+        self.audio_len = file_path.stat().st_size - frozen_metadata_len
+        self._id3v2_head_bytes = None
+        self._id3v2_tail_bytes = None
+        self._id3v1_bytes = None
+
+        self.id3v2_head_len = metadata['id3v2_head'].size if metadata and metadata['id3v2_head'] else 0
+        self.id3v2_tail_len = metadata['id3v2_tail'].size if metadata and metadata['id3v2_tail'] else 0
+        self.id3v1_len = 128 if metadata and metadata['id3v1'] else 0
+
+        self.audio_offset = 0
+        for type, size in file_metadata_info:
+            if type.startswith('head-ID3v2'):
+                self.audio_offset = size
+                break
+
+    def id3v2_head_bytes(self):
+        if self.metadata['id3v2_head'] and self._id3v2_head_bytes == None:
+            self._id3v2_head_bytes = Optional(Id3v2Format).build(self.metadata['id3v2_head'])
+        return self._id3v2_head_bytes
+
+    def id3v2_tail_bytes(self):
+        if self.metadata['id3v2_tail'] and self._id3v2_tail_bytes == None:
+            self._id3v2_tail_bytes = Optional(Id3v2Format).build(self.metadata['id3v2_tail'])
+        return self._id3v2_tail_bytes
+
+    def id3v1_bytes(self):
+        if self.metadata['id3v1'] and self._id3v1_bytes == None:
+            self._id3v1_bytes = Optional(Id3v1Format).build(self.metadata['id3v1'])
+        return self._id3v1_bytes
+
+    def read(self, length, offset):
+        f = self.file
+        buf = b''
+
+        id3v2_head_len = self.id3v2_head_len
+        if offset < id3v2_head_len:
+            b = self.id3v2_head_bytes()
+            end = min(id3v2_head_len, offset + length)
+            buf = b[offset:end]
+            length -= len(buf)
+            if not length:
+                return buf
+            offset = id3v2_head_len
+        offset -= id3v2_head_len
+
+        audio_len = self.audio_len
+        if offset < audio_len:
+            audio_offset = self.audio_offset + offset
+            f.seek(audio_offset, 0)
+            tmp = f.read(length)
+            length -= len(tmp)
+            buf += tmp
+            if not length:
+                return buf
+            offset = audio_len
+        offset -= audio_len
+
+        id3v2_tail_len = self.id3v2_tail_len
+        if offset < id3v2_tail_len:
+            b = self.id3v2_tail_bytes()
+            end = min(id3v2_tail_len, offset + length)
+            tmp = b[offset:end]
+            length -= len(tmp)
+            buf += tmp
+            if not length:
+                return buf
+            offset = id3v2_tail_len
+        offset -= id3v2_tail_len
+
+        b = self.id3v1_bytes()
+        return buf + b[offset:offset+length]

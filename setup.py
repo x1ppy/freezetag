@@ -21,8 +21,11 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/x1ppy/freezetag",
-    python_requires='>=3.6',
+    python_requires='>=3.5.2',
     install_requires=[
-        "construct",
+        'appdirs',
+        'construct',
+        'fusepy',
+        'watchdog',
     ],
 )

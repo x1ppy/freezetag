@@ -1,7 +1,7 @@
 import hashlib
 import os
-from freezetag import formats
 from construct import *
+from . import formats
 
 
 class ParsedFile:
@@ -22,10 +22,10 @@ class ParsedFile:
     @property
     def instance(self):
         if not self._instance:
-            self._instance = self._make_instance()
+            self._instance = self.parse()
         return self._instance
 
-    def _make_instance(self):
+    def parse(self):
         raise NotImplementedError()
 
     def strip(self):
@@ -50,6 +50,7 @@ class MusicMetadata:
     def __init__(self, format, value):
         self.format = format
         self.value = value
+        self.size = sum(m[1] for m in self)
 
     def checksum(self):
         return hashlib.sha1(self.format.build(self.value)).digest()
@@ -59,7 +60,7 @@ class MusicMetadata:
 
 
 class MusicParsedFile(ParsedFile):
-    def _make_instance(self):
+    def parse(self):
         instance = self.format.parse_file(self.path)
 
         # Workaround for https://github.com/construct/construct/issues/852
@@ -73,3 +74,28 @@ class MusicParsedFile(ParsedFile):
 
     def write(self, path):
         self.format.build_file(self.instance, path)
+
+
+class FuseFile:
+    fh = 0
+
+    @staticmethod
+    def from_info(file_path, *args):
+        suffix = file_path.suffix.lower()
+        if suffix == '.flac':
+            return formats.flac.FuseFile(file_path, *args)
+        if suffix == '.mp3':
+            return formats.mp3.FuseFile(file_path, *args)
+        return formats.generic.FuseFile(file_path, *args)
+
+    def __init__(self, file_path, flags, metadata, file_metadata_info, file_metadata_len, frozen_metadata_len):
+        self.file = file_path.open('rb')
+        self.metadata = metadata
+        self.fh = FuseFile.fh
+        FuseFile.fh += 1
+
+    def read(self, length, offset):
+        raise NotImplementedError()
+
+    def close(self):
+        self.file.close()
