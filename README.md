@@ -290,6 +290,9 @@ If you use a custom naming scheme for your freezetags (by passing `--ftag` to `f
 
 Changelog
 ---------
+### [1.2.1] - 2021-04-21
+* Fixed `--json` flag for `show`
+* Fixed file monitoring for failed stat
 ### [1.2.0] - 2020-04-26
 * Added `mount` command
 * Refactored modules and API
@@ -313,6 +316,7 @@ Changelog
 ### [1.0.0] - 2020-04-06
 * Initial release
 
+[1.2.1]: https://github.com/x1ppy/freezetag/compare/1.2.0...1.2.1
 [1.2.0]: https://github.com/x1ppy/freezetag/compare/1.1.1...1.2.0
 [1.1.1]: https://github.com/x1ppy/freezetag/compare/1.1.0...1.1.1
 [1.1.0]: https://github.com/x1ppy/freezetag/compare/1.0.4...1.1.0
