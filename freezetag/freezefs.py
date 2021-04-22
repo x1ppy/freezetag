@@ -223,7 +223,12 @@ class FreezeFS(Operations, FileSystemEventHandler):
             freezetag_map[1].append(state.checksum)
 
     def _add_file(self, src):
-        st = src.stat()
+        try:
+            st = src.stat()
+        except:
+            print(f'cannot stat file: {src}')
+            return
+
         cached = self.checksum_db.get(st.st_dev, st.st_ino, st.st_mtime)
         if cached:
             self._log_verbose(f'adding cached file: {src}')
