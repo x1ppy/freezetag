@@ -1,17 +1,9 @@
 #!/usr/bin/env python3
-import construct
 import hashlib
-import json
-import os
-import re
-import shutil
-import sys
-from construct import *
-from datetime import datetime
-from pathlib import Path
-from .base import ParsedFile, MusicMetadata
-from .formats import generic, flac, mp3
 
+from construct import *
+
+from .formats import generic, flac, mp3
 
 # Used for FrozenFormat > files > format.
 generic.ParsedFile.format_id = 0
@@ -20,7 +12,6 @@ mp3.ParsedFile.format_id = 2
 
 # Used for freezetag mount cache.
 DB_VERSION = 1
-
 
 FrozenFormatV1 = Struct(
     'mode' / Computed(0),
@@ -60,7 +51,7 @@ FrozenFormatV2 = Struct(
 
 FreezeFormat = Struct(
     'signature' / Const(b'freezetag'),
-    'version'/ Int8ub,
+    'version' / Int8ub,
     'frozen' / Switch(this.version, {
         1: FrozenFormatV1,
         2: FrozenFormatV2,
@@ -119,9 +110,9 @@ class ChecksumDB:
         self._format = ChecksumDBAdapter(DBFormat)
         try:
             self._db = self._format.parse_file(str(path))
-            print('using existing database {0}'.format(path))
+            print(f'using existing database {path}')
         except:
-            print('creating database at {0}'.format(path))
+            print(f'creating database at {path}')
             self._db = {}
 
     def get(self, device, inode, mtime):

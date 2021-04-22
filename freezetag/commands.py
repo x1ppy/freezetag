@@ -7,9 +7,9 @@ import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
+
 from .base import ParsedFile, MusicMetadata
 from .core import Freezetag
-
 
 # Version 2 is used only for "freeze --backup" freezetags.
 # All other freezetags are still created using version 1 so the bytes/IDs stay consistent.
@@ -51,7 +51,7 @@ def hash_bytes(b):
 
 def find_ftag(path):
     if not path.exists():
-        raise CommandException('Given ftag is not a file or directory: {0}'.format(path))
+        raise CommandException(f'Given ftag is not a file or directory: {path}')
 
     if path.is_file():
         return path
@@ -59,17 +59,17 @@ def find_ftag(path):
     freezetag_paths = [p for p in path.iterdir() if p.suffix.lower() == '.ftag']
 
     if not len(freezetag_paths):
-        raise CommandException('No freezetag file found in {0}'.format(path))
+        raise CommandException(f'No freezetag file found in {path}')
 
     index = 0
 
     if len(freezetag_paths) > 1:
-        print('Multiple freezetags found in directory: {0}'.format(path.resolve()))
+        print(f'Multiple freezetags found in directory: {path.resolve()}')
         for i, path in enumerate(freezetag_paths):
-            print('{0}: {1}'.format(i, path.name))
+            print(f'{i}: {path.name}')
         choice = ''
         while not choice.isdecimal() or int(choice) < 0 or int(choice) >= len(freezetag_paths):
-            choice = input('Select freezetag [0-{0}], or q to quit: '.format(len(freezetag_paths)-1))
+            choice = input(f'Select freezetag [0-{len(freezetag_paths) - 1}], or q to quit: ')
             if choice.lower() == 'q':
                 sys.exit(0)
         index = int(choice)
@@ -92,7 +92,7 @@ def walk_dir(path):
 def shave(directory, **kwargs):
     root = Path(directory).resolve()
     if not root.exists():
-        raise CommandException('Directory does not exist: {0}'.format(root))
+        raise CommandException(f'Directory does not exist: {root}')
 
     for path, rel_path in walk_dir(root):
         file = ParsedFile.from_path(path)
@@ -108,8 +108,7 @@ def shave(directory, **kwargs):
             print('    no metadata found')
             continue
 
-        print('    shaved {0}'.format(', '.join('{0} ({1})'.format(label, size)
-            for label, size in metadata)))
+        print('    shaved {0}'.format(', '.join(f'{label} ({size})' for label, size in metadata)))
 
         file.write(path)
 
@@ -121,7 +120,7 @@ def prepare_thaw(root, frozen, thaw_in_place, checksum_to_item):
     reprinter = Reprinter()
 
     for path, rel_path in walk_dir(root):
-        reprinter.print('Checking...{0}'.format(rel_path))
+        reprinter.print(f'Checking...{rel_path}')
 
         file = ParsedFile.from_path(path)
         file.strip()
@@ -129,7 +128,7 @@ def prepare_thaw(root, frozen, thaw_in_place, checksum_to_item):
 
         if checksum not in checksum_to_item:
             unrecognized_found = True
-            reprinter.print('    Unrecognized file: {0}'.format(path))
+            reprinter.print(f'    Unrecognized file: {path}')
             print()
             continue
 
@@ -141,11 +140,11 @@ def prepare_thaw(root, frozen, thaw_in_place, checksum_to_item):
     print()
 
     if thaw_in_place and unrecognized_found and Path(commonpath) != root:
-        print('\nCommon path ({0}) does not match thaw directory ({1}).'.format(commonpath, root))
-        print("You're thawing in-place, so the structure of {0} will be changed.".format(root))
+        print(f'\nCommon path ({commonpath}) does not match thaw directory ({root}).')
+        print(f"You're thawing in-place, so the structure of {root} will be changed.")
         print('This directory may be renamed, and unrecognized files will be left in their paths'
               ' relative to this directory.')
-        print('Make sure that you didn\'t intend to thaw {0} instead.'.format(commonpath))
+        print(f'Make sure that you didn\'t intend to thaw {commonpath} instead.')
         while True:
             choice = input('Continue anyway? (y/n): ').lower()
             if choice == 'y':
@@ -156,7 +155,7 @@ def prepare_thaw(root, frozen, thaw_in_place, checksum_to_item):
     missing_music = False
     for file in frozen.files:
         if not checksum_to_item[file.checksum][1]:
-            print('    Missing: {0} ({1})'.format(file.path, file.checksum.hex()), file=sys.stderr)
+            print(f'    Missing: {file.path} ({file.checksum.hex()})', file=sys.stderr)
             if file.format:
                 missing_music = True
 
@@ -175,14 +174,14 @@ def prepare_thaw(root, frozen, thaw_in_place, checksum_to_item):
 def thaw(directory, to, ftag, skip_checks, **kwargs):
     root = Path(directory).resolve()
     if not root.exists():
-        raise CommandException('Directory does not exist: {0}'.format(root))
+        raise CommandException(f'Directory does not exist: {root}')
 
     ftag = find_ftag(Path(ftag or root))
     freezetag = Freezetag.from_path(ftag)
 
     if freezetag.data.version > VERSION:
         raise CommandException('Freezetag file version greater than freezetag version ({0} > {1}).\n'
-                                 'Update freezetag and try again.'.format(freezetag.data.version, VERSION))
+                               'Update freezetag and try again.'.format(freezetag.data.version, VERSION))
 
     frozen = freezetag.data.frozen
     to_dir = Path(to).resolve() / frozen.root if to else root
@@ -196,7 +195,7 @@ def thaw(directory, to, ftag, skip_checks, **kwargs):
             checksum_to_item[f.checksum] = [[], False, False]
         checksum_to_item[f.checksum][0].append(f)
 
-    print('Processing {0}...'.format(root))
+    print(f'Processing {root}...')
 
     # First pass: verify directory and calculate checksums.
     path_to_item = None
@@ -222,13 +221,12 @@ def thaw(directory, to, ftag, skip_checks, **kwargs):
                 continue
             item = checksum_to_item[checksum]
 
-        reprinter.print('Thawing metadata...{0}'.format(rel_path))
+        reprinter.print(f'Thawing metadata...{rel_path}')
 
         if item[2]:
             continue
 
         item[2] = True
-        num_files = len(item[0])
 
         for state in item[0]:
             to_path = tmp_dir / state.path
@@ -262,12 +260,12 @@ def thaw(directory, to, ftag, skip_checks, **kwargs):
 
     # Third pass: move files from tmp_dir to their final destinations.
     for path, rel_path in walk_dir(tmp_dir):
-        reprinter.print('Restoring files...{0}'.format(rel_path))
+        reprinter.print(f'Restoring files...{rel_path}')
         to_path = to_dir / rel_path
         to_path.parent.mkdir(parents=True, exist_ok=True)
         path.rename(to_path)
 
-    reprinter.print('Restoring files...done.'.format(rel_path))
+    reprinter.print('Restoring files...done.')
     print()
 
     shutil.rmtree(tmp_dir)
@@ -275,14 +273,14 @@ def thaw(directory, to, ftag, skip_checks, **kwargs):
     if thaw_in_place:
         new_root = root.parent / frozen.root
         if root != new_root:
-            print('Renaming {0} to {1}'.format(root, new_root))
+            print(f'Renaming {root} to {new_root}')
             root.rename(new_root)
 
 
 def freeze(directory, backup, ftag, **kwargs):
     root = Path(directory).resolve()
     if not root.exists():
-        raise CommandException('Directory does not exist: {0}'.format(root))
+        raise CommandException(f'Directory does not exist: {root}')
 
     tmp_paths = [p for p in root.iterdir() if p.suffix.lower() == '.ftag-tmp']
 
@@ -291,8 +289,8 @@ def freeze(directory, backup, ftag, **kwargs):
     # abort and have the user fix it first.
     if len(tmp_paths):
         raise CommandException(
-            'Unrestored freezetag data found at {0}.\n'
-            'Run freezetag thaw again to finish processing.'.format(tmp_paths[0]))
+            f'Unrestored freezetag data found at {tmp_paths[0]}.\n'
+            'Run freezetag thaw again to finish processing.')
 
     to_path = Path(ftag or root)
     existing = {}
@@ -360,7 +358,7 @@ def freeze(directory, backup, ftag, **kwargs):
             metadata_checksum = metadata.checksum()
             metadata_checksums.append(metadata_checksum)
 
-        reprinter.print('Collecting metadata...{0}'.format(rel_path))
+        reprinter.print(f'Collecting metadata...{rel_path}')
 
     reprinter.print('Collecting metadata...done.')
     print()
@@ -368,9 +366,9 @@ def freeze(directory, backup, ftag, **kwargs):
     if not len(music_checksums):
         raise CommandException('No music files found.')
 
-    if existing_path_count == len(existing) and existing_path_count == len(files)\
+    if existing_path_count == len(existing) and existing_path_count == len(files) \
             and last_frozen.root == root.name:
-        print('No changes since last freezetag ({0}).'.format(last_ftag[0].name))
+        print(f'No changes since last freezetag ({last_ftag[0].name}).')
         return
 
     print('Building freezetag...')
@@ -389,14 +387,14 @@ def freeze(directory, backup, ftag, **kwargs):
 
     if to_path.is_dir():
         filename = 'F' + datetime.now().strftime('%Y-%m-%d_%H-%M-%S') if backup else freezetag.get_id()
-        to_path = to_path / '{0}.ftag'.format(filename)
+        to_path = to_path / f'{filename}.ftag'
 
     freezetag.write(to_path)
 
-    print('Freezetag created at {0}'.format(to_path))
+    print(f'Freezetag created at {to_path}')
 
 
-def show(path, json, **kwargs):
+def show(path, as_json, **kwargs):
     ftag = find_ftag(Path(path))
 
     freezetag = Freezetag.from_path(ftag)
@@ -404,14 +402,14 @@ def show(path, json, **kwargs):
 
     if version > VERSION:
         raise CommandException('Freezetag file version greater than freezetag version ({0} > {1}).\n'
-                                 'Update freezetag and try again.'.format(version, VERSION))
+                               'Update freezetag and try again.'.format(version, VERSION))
 
     frozen = freezetag.data.frozen
 
-    if json:
+    if as_json:
         print(json.dumps({
             'version': version,
-            'mode': freeze_modes[frozen.data.mode],
+            'mode': freeze_modes[frozen.mode],
             'id': freezetag.get_id(),
             'root': frozen.root,
             'files': [{
@@ -420,12 +418,12 @@ def show(path, json, **kwargs):
             } for f in frozen.files],
         }, indent=2))
     else:
-        print('version: {0}'.format(version))
-        print('mode:    {0}'.format(freeze_modes[frozen.mode]))
-        print('id:      {0}'.format(freezetag.get_id()))
-        print('root:    {0} '.format(frozen.root))
+        print(f'version: {version}')
+        print(f'mode:    {freeze_modes[frozen.mode]}')
+        print(f'id:      {freezetag.get_id()}')
+        print(f'root:    {frozen.root}')
         for f in frozen.files:
-            print('{0} {1}'.format(f.checksum.hex(), f.path))
+            print(f'{f.checksum.hex()} {f.path}')
 
 
 def mount(directory, mount_point, verbose, **kwargs):

@@ -9,13 +9,13 @@ setuptools.setup(
     author="x1ppy",
     author_email="",
     packages=[
-      'freezetag',
-      'freezetag.formats',
+        'freezetag',
+        'freezetag.formats',
     ],
     entry_points={
-      'console_scripts': [
-        'freezetag = freezetag.__main__:main',
-      ],
+        'console_scripts': [
+            'freezetag = freezetag.__main__:main',
+        ],
     },
     description="save, strip, and restore file paths and music metadata",
     long_description=long_description,

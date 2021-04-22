@@ -5,14 +5,16 @@ import os
 import platform
 import sys
 import time
-from appdirs import user_cache_dir
 from collections import OrderedDict
 from errno import ENOENT
 from pathlib import Path
-from stat import S_IFDIR, S_IFREG
+from stat import S_IFDIR
 from threading import Lock, Timer
-from watchdog.observers import Observer
+
+from appdirs import user_cache_dir
 from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
+
 from .base import FuseFile, MusicMetadata, ParsedFile
 from .core import ChecksumDB, Freezetag
 
@@ -135,13 +137,13 @@ class FreezeFS(Operations, FileSystemEventHandler):
         observer.schedule(self, directory, recursive=True)
         observer.start()
 
-        print('scanning {0} for files and freezetags...'.format(directory))
+        print(f'scanning {directory} for files and freezetags...')
 
         for path in walk_dir(directory):
             (self._add_ftag if path.suffix.lower() == '.ftag' else self._add_file)(path)
         self.checksum_db.flush()
 
-        print('mounting {0}'.format(mount_point))
+        print(f'mounting {mount_point}')
         FUSE(self, mount_point, nothreads=True, foreground=True, fsname='freezefs', volname=Path(mount_point).name)
 
     # Helpers
@@ -160,7 +162,7 @@ class FreezeFS(Operations, FileSystemEventHandler):
 
         item.freezetags.append(entry)
 
-        assert(not self._get_item(entry.path))
+        assert (not self._get_item(entry.path))
 
         map = self.path_map
         parts = Path(entry.path).parts
@@ -196,17 +198,17 @@ class FreezeFS(Operations, FileSystemEventHandler):
         except KeyboardInterrupt:
             raise
         except:
-            print('cannot parse freezetag: {0}'.format(path))
+            print(f'cannot parse freezetag: {path}')
             return
         finally:
             self.freezetag_ref_lock.release()
 
-        self._log_verbose('adding freezetag: {0}'.format(path))
+        self._log_verbose(f'adding freezetag: {path}')
 
         root = Path('/') / freezetag.data.frozen.root
         item = self._get_item(root)
         if item:
-            print('cannot mount {0} to {1}: path already mounted by another freezetag'.format(path, root))
+            print(f'cannot mount {path} to {root}: path already mounted by another freezetag')
             self.inactive_freezetags.append([root, path])
             return
 
@@ -224,7 +226,7 @@ class FreezeFS(Operations, FileSystemEventHandler):
         st = src.stat()
         cached = self.checksum_db.get(st.st_dev, st.st_ino, st.st_mtime)
         if cached:
-            self._log_verbose('adding cached file: {0}'.format(src))
+            self._log_verbose(f'adding cached file: {src}')
             checksum, metadata_info, metadata_len, mtime = cached
             entry = FrozenItemFileEntry(src, metadata_info, metadata_len)
             self._add_path_entry(checksum, entry)
@@ -236,10 +238,10 @@ class FreezeFS(Operations, FileSystemEventHandler):
         except KeyboardInterrupt:
             raise
         except:
-            print('cannot parse file: {0}'.format(src))
+            print(f'cannot parse file: {src}')
             return
 
-        self._log_verbose('adding new file: {0}'.format(src))
+        self._log_verbose(f'adding new file: {src}')
 
         metadata = file.strip()
         metadata_info = list(metadata) if metadata else []
@@ -269,7 +271,7 @@ class FreezeFS(Operations, FileSystemEventHandler):
             del self.abs_path_map[file_path]
 
     def _can_purge_ftag(self, path):
-        assert(self.freezetag_ref_lock.locked())
+        assert (self.freezetag_ref_lock.locked())
 
         if path not in self.freezetag_refs:
             return True
@@ -288,7 +290,7 @@ class FreezeFS(Operations, FileSystemEventHandler):
             self.freezetag_ref_lock.release()
 
     def _schedule_purge_ftag(self, path):
-        assert(self.freezetag_ref_lock.locked())
+        assert (self.freezetag_ref_lock.locked())
 
         t = Timer(FREEZETAG_KEEPALIVE_TIME, lambda: self._purge_ftag(path, force=False))
         t.start()
@@ -325,7 +327,7 @@ class FreezeFS(Operations, FileSystemEventHandler):
                 raise FuseOSError(ENOENT)
 
             st = file_entry.path.stat()
-            d = {key:getattr(st, key) for key in ST_ITEMS}
+            d = {key: getattr(st, key) for key in ST_ITEMS}
             d['st_size'] += frozen_entry.metadata_len - file_entry.metadata_len
             return d
 
@@ -380,7 +382,7 @@ class FreezeFS(Operations, FileSystemEventHandler):
                     break
 
         file = FuseFile.from_info(file_entry.path, flags, metadata, file_entry.metadata_info, file_entry.metadata_len,
-                frozen_entry.metadata_len)
+                                  frozen_entry.metadata_len)
         self.fh_map[file.fh] = (file, freezetag_path)
         return file.fh
 
@@ -410,7 +412,7 @@ class FreezeFS(Operations, FileSystemEventHandler):
         if dst.is_dir():
             return
 
-        self._log_verbose('moved: {0} to {1}'.format(src, dst))
+        self._log_verbose(f'moved: {src} to {dst}')
 
         if src.suffix.lower() == '.ftag':
             self._purge_ftag(src, force=True)
@@ -457,7 +459,7 @@ class FreezeFS(Operations, FileSystemEventHandler):
         path = Path(event.src_path)
 
         if path.suffix.lower() != '.ftag':
-            self._log_verbose('deleting file {0}'.format(path))
+            self._log_verbose(f'deleting file {path}')
 
             item = self.abs_path_map.get(path)
             if not item:
@@ -470,7 +472,7 @@ class FreezeFS(Operations, FileSystemEventHandler):
                     break
             return
 
-        self._log_verbose('deleting freezetag {0}'.format(path))
+        self._log_verbose(f'deleting freezetag {path}')
 
         self._purge_ftag(path, force=True)
 

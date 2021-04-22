@@ -1,6 +1,7 @@
 import hashlib
-import os
+
 from construct import *
+
 from . import formats
 
 
