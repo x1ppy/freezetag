@@ -35,8 +35,8 @@ FREEZETAG_KEEPALIVE_TIME = 10
 CACHE_DIR = Path(user_cache_dir('freezetag', 'x1ppy'))
 
 ST_ITEMS = ['st_atime', 'st_ctime', 'st_gid', 'st_mode', 'st_mtime', 'st_nlink', 'st_size', 'st_uid']
-if platform.system() != 'Windows':
-    ST_ITEMS.append('st_birthtime')
+# if platform.system() != 'Windows':
+#    ST_ITEMS.append('st_birthtime')
 
 
 # An LRU cache with mostly standard behavior besides one thing: it asks whether
@@ -123,7 +123,7 @@ class FreezeFS(Operations, FileSystemEventHandler):
             'st_atime': now,
             'st_ctime': now,
             'st_mtime': now,
-            'st_birthtime': now,
+            # 'st_birthtime': now,
             'st_mode': S_IFDIR | 0o755,
             'st_nlink': 2,
             'st_gid': gid,
@@ -144,7 +144,7 @@ class FreezeFS(Operations, FileSystemEventHandler):
         self.checksum_db.flush()
 
         print(f'mounting {mount_point}')
-        FUSE(self, mount_point, nothreads=True, foreground=True, fsname='freezefs', volname=Path(mount_point).name)
+        FUSE(self, mount_point, nothreads=True, foreground=True, fsname='freezefs')
 
     # Helpers
     # =======
