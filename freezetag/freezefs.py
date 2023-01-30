@@ -144,7 +144,7 @@ class FreezeFS(Operations, FileSystemEventHandler):
         self.checksum_db.flush()
 
         print(f'mounting {mount_point}')
-        FUSE(self, mount_point, nothreads=True, foreground=True, fsname='freezefs')
+        FUSE(self, mount_point, nothreads=True, foreground=True, fsname='freezefs', debug=True)
 
     # Helpers
     # =======
